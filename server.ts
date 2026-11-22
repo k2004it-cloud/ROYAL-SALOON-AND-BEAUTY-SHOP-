@@ -7,13 +7,21 @@ const PORT = Number(process.env.PORT || 3000);
 const PYTHON_PORT = Number(process.env.PYTHON_API_PORT || 8001);
 const PYTHON_URL = `http://127.0.0.1:${PYTHON_PORT}`;
 const IS_PROD = process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve(process.cwd(), 'dist'));
+const DEMO_MODE =
+  process.env.NODE_ENV !== 'production' &&
+  (process.env.SALON_DEMO_MODE === 'true' || process.argv.includes('--demo'));
 
 let pythonProc: ChildProcess | null = null;
 
 function startPythonBackend(): ChildProcess {
   const scriptPath = path.resolve(process.cwd(), 'backend/salon_api.py');
-  const child = spawn('python3', [scriptPath], {
-    env: { ...process.env, PYTHON_API_PORT: String(PYTHON_PORT) },
+  const pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
+  const child = spawn(pythonCommand, [scriptPath], {
+    env: {
+      ...process.env,
+      PYTHON_API_PORT: String(PYTHON_PORT),
+      SALON_DEMO_MODE: String(DEMO_MODE),
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -54,6 +62,12 @@ async function proxyToPython(req: Request, res: Response): Promise<void> {
   if (req.headers['content-type']) {
     headers['content-type'] = String(req.headers['content-type']);
   }
+  if (req.headers.cookie) {
+    headers.cookie = req.headers.cookie;
+  }
+  if (req.headers['x-forwarded-proto']) {
+    headers['x-forwarded-proto'] = String(req.headers['x-forwarded-proto']);
+  }
 
   const init: RequestInit = {
     method: req.method,
@@ -80,8 +94,10 @@ async function proxyToPython(req: Request, res: Response): Promise<void> {
     res.status(upstream.status);
     const contentType = upstream.headers.get('content-type');
     const disposition = upstream.headers.get('content-disposition');
+    const setCookie = upstream.headers.get('set-cookie');
     if (contentType) res.setHeader('Content-Type', contentType);
     if (disposition) res.setHeader('Content-Disposition', disposition);
+    if (setCookie) res.setHeader('Set-Cookie', setCookie);
 
     const buf = Buffer.from(await upstream.arrayBuffer());
     res.send(buf);

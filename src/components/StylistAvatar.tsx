@@ -26,7 +26,7 @@ export function StylistAvatar({ src, name, size = 'md' }: StylistAvatarProps) {
   if (!src || failed) {
     return (
       <div
-        className={`${dims} shrink-0 rounded-lg bg-[#EDE9FE] text-[#6D28D9] font-semibold flex items-center justify-center border border-[#DDD6FE]`}
+        className={`${dims} shrink-0 rounded-full bg-gradient-to-br from-[#E8F1FF] to-[#D8E7FB] text-[#0B5ED7] font-semibold flex items-center justify-center border border-[#A7C6F8]`}
         aria-label={name}
       >
         {initials || 'SP'}
@@ -40,7 +40,7 @@ export function StylistAvatar({ src, name, size = 'md' }: StylistAvatarProps) {
       alt={name}
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className={`${dims} shrink-0 rounded-lg object-cover border border-[#E5E7EB] bg-[#F3F4F6]`}
+      className={`${dims} shrink-0 rounded-lg object-cover border border-[#E1E7F0] bg-[#F1F4F9]`}
     />
   );
 }

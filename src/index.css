@@ -4,24 +4,40 @@
   --font-display: "Playfair Display", Georgia, serif;
   --font-sans: "Manrope", system-ui, -apple-system, sans-serif;
 
-  --color-plum-chrome: #1E152A;
-  --color-plum-deep: #120D1A;
-  --color-royal-violet: #6D28D9;
-  --color-royal-violet-hover: #5B21B6;
-  --color-royal-violet-bright: #7C3AED;
-  --color-lavender-wash: #EDE9FE;
-  --color-lavender-border: #DDD6FE;
-  --color-studio-canvas: #F9FAFB;
-  --color-ink: #151C27;
-  --color-muted-slate: #6B7280;
-  --color-hairline: #E5E7EB;
+  --color-plum-chrome: #081B36;
+  --color-plum-deep: #071426;
+  --color-royal-violet: #0D6EFD;
+  --color-royal-violet-hover: #0B5ED7;
+  --color-royal-violet-bright: #3B82F6;
+  --color-lavender-wash: #E8F1FF;
+  --color-lavender-border: #C5D8F4;
+  --color-studio-canvas: #F4F7FC;
+  --color-ink: #14213D;
+  --color-muted-slate: #667085;
+  --color-hairline: #E1E7F0;
 }
 
 @layer base {
   html {
     font-family: var(--font-sans);
-    color: #151C27;
-    background-color: #F9FAFB;
+    color: #14213D;
+    background-color: #DCE5F1;
+  }
+
+  body {
+    position: relative;
+    background: transparent;
+    min-height: 100vh;
+  }
+
+  #root {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.58)),
+      url("/background%20image.jpg");
+    background-attachment: fixed;
+    background-position: center;
+    background-size: cover;
+    min-height: 100vh;
   }
 
   button,
@@ -34,6 +50,10 @@
 }
 
 .font-serif-editorial {
+  font-family: var(--font-sans);
+}
+
+.beauty-sidebar .font-serif-editorial {
   font-family: var(--font-display);
 }
 
@@ -44,28 +64,105 @@
 
 .salon-card {
   background-color: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  box-shadow: 0 1px 3px rgba(30, 21, 42, 0.04), 0 1px 2px rgba(30, 21, 42, 0.02);
+  border: 1px solid #DFE7F1;
+  box-shadow: 0 10px 30px -18px rgba(15, 42, 84, 0.12), 0 2px 8px rgba(15, 42, 84, 0.03);
 }
 
 .salon-sheet {
   background-color: #FFFFFF;
-  border: 1px solid #DDD6FE;
-  box-shadow: 0 10px 25px -5px rgba(30, 21, 42, 0.08), 0 8px 10px -6px rgba(30, 21, 42, 0.04);
+  border: 1px solid #DFE7F1;
+  box-shadow: 0 12px 30px -8px rgba(15, 42, 84, 0.08);
 }
 
 .salon-input {
   height: 44px;
   background-color: #FFFFFF;
-  border: 1px solid #E5E7EB;
+  border: 1px solid #DDE6F1;
   border-radius: 0.5rem;
   transition: border-color 150ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .salon-input:focus {
   outline: none;
-  border: 1.5px solid #6D28D9;
-  box-shadow: 0 0 0 3px rgba(109, 40, 217, 0.15);
+  border: 1.5px solid #0D6EFD;
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.14);
+}
+
+.beauty-sidebar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
+    linear-gradient(160deg, #0A1D3A 0%, #081B36 58%, #071426 100%);
+}
+
+.beauty-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3), transparent);
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(13, 110, 253, 0.38);
+  outline-offset: 2px;
+}
+
+.salon-card,
+.salon-sheet {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+@media (hover: hover) {
+  .salon-card:hover {
+    border-color: #C5D8F4;
+  }
+}
+
+.beauty-toast {
+  animation: beauty-toast-in 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes beauty-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #EAF2FF 25%, #F4F7FC 50%, #EAF2FF 75%);
+  background-size: 200% 100%;
+  animation: beauty-shimmer 1.35s ease-in-out infinite;
+}
+
+@keyframes beauty-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 @media print {

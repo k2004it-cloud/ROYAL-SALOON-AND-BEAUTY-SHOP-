@@ -1,4 +1,82 @@
-export type WorkspaceTab = 'schedule' | 'pos' | 'clients' | 'catalog' | 'ledger';
+export type WorkspaceTab =
+  | 'dashboard'
+  | 'my-day'
+  | 'earnings'
+  | 'my-appointments'
+  | 'my-clients'
+  | 'timesheet'
+  | 'tasks'
+  | 'notifications'
+  | 'profile'
+  | 'schedule'
+  | 'pos'
+  | 'clients'
+  | 'catalog'
+  | 'employees'
+  | 'inventory'
+  | 'reports'
+  | 'settings'
+  | 'system-logs'
+  | 'backups'
+  | 'support';
+
+export type StaffRole = 'admin' | 'employee';
+
+export interface StaffUser {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  stylist_id?: string;
+  role: StaffRole;
+  active: boolean;
+  created_at?: string;
+}
+
+export interface BusinessSettings {
+  business_name: string;
+  phone: string;
+  email: string;
+  address: string;
+  opening_time: string;
+  closing_time: string;
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actor_name: string;
+  actor_role: StaffRole;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  summary: string;
+  created_at: string;
+}
+
+export type SupportRequestStatus = 'open' | 'in_progress' | 'resolved';
+
+export interface SupportRequest {
+  id: string;
+  requester_name: string;
+  requester_email: string;
+  category: string;
+  priority: 'low' | 'normal' | 'high';
+  subject: string;
+  message: string;
+  status: SupportRequestStatus;
+  admin_reply: string;
+  created_at: string;
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface AuthStatus {
+  setup_required: boolean;
+  demo_mode: boolean;
+  user: StaffUser | null;
+}
 
 export type AppointmentStatus =
   | 'Pending'
@@ -74,7 +152,7 @@ export interface TicketItem {
   ticket_id: string;
   catalog_item_id: string;
   item_name: string;
-  kind: 'service' | 'product';
+  kind: 'service' | 'product' | 'tip';
   stylist_id: string;
   stylist_name: string;
   quantity: number;
@@ -127,14 +205,32 @@ export interface DailyAnalytics {
   low_stock_count: number;
 }
 
+export interface DailyRevenuePoint {
+  date: string;
+  revenue_ksh: number;
+  ticket_count: number;
+}
+
 export interface BootstrapPayload {
   date: string;
+  business_settings: BusinessSettings;
   stylists: Stylist[];
   catalog: CatalogItem[];
   clients: Client[];
   appointments: Appointment[];
   analytics: DailyAnalytics;
   tickets: Ticket[];
+  employee_dashboard?: EmployeeDashboard;
+}
+
+export interface EmployeeDashboard {
+  today_sales_ksh: number;
+  clients_served_week: number;
+  weekly_sales_ksh: number;
+  weekly_commission_ksh: number;
+  performance_percent: number;
+  low_stock_items: Array<{ id: string; name: string; stock_qty: number }>;
+  weekly_revenue: DailyRevenuePoint[];
 }
 
 export interface CartLine {

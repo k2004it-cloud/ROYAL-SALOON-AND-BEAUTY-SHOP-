@@ -39,6 +39,8 @@ interface PosViewProps {
     client_name: string;
     appointment_id?: string;
     payment_method: PaymentMethod;
+    tip_ksh: number;
+    tip_stylist_id: string;
     discount_type: 'none' | 'percent' | 'fixed';
     discount_value: number;
     tendered_ksh: number;
@@ -78,6 +80,8 @@ export function PosView({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [discountType, setDiscountType] = useState<'none' | 'percent' | 'fixed'>('none');
   const [discountValue, setDiscountValue] = useState<number>(0);
+  const [tipInput, setTipInput] = useState<string>('0');
+  const [tipStylistId, setTipStylistId] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('M-Pesa');
   const [tenderInput, setTenderInput] = useState<string>('');
   const [showNumpad, setShowNumpad] = useState<boolean>(false);
@@ -114,12 +118,14 @@ export function PosView({
   }, [subtotalKsh, discountType, discountValue]);
 
   const totalKsh = Math.max(0, subtotalKsh - discountKsh);
+  const tipKsh = Math.max(0, Math.round(Number(tipInput) || 0));
+  const totalWithTipKsh = totalKsh + tipKsh;
   const vatIncludedKsh = Math.round((totalKsh * 16) / 116);
   const tenderedKsh =
     paymentMethod === 'Cash'
-      ? Number(tenderInput || totalKsh)
-      : totalKsh;
-  const changeKsh = Math.max(0, tenderedKsh - totalKsh);
+      ? Number(tenderInput || totalWithTipKsh)
+      : totalWithTipKsh;
+  const changeKsh = Math.max(0, tenderedKsh - totalWithTipKsh);
 
   const handleDigit = (digit: string) => {
     setTenderInput((prev) => {
@@ -139,6 +145,8 @@ export function PosView({
         client_name: selectedClient ? selectedClient.name : 'Walk-In Guest',
         appointment_id: linkedAppointmentId || undefined,
         payment_method: paymentMethod,
+        tip_ksh: tipKsh,
+        tip_stylist_id: tipStylistId || cart.find((line) => line.kind === 'service')?.stylist_id || '',
         discount_type: discountType,
         discount_value: discountValue,
         tendered_ksh: tenderedKsh,
@@ -152,6 +160,8 @@ export function PosView({
       setReceiptTicket(settled);
       setDiscountType('none');
       setDiscountValue(0);
+      setTipInput('0');
+      setTipStylistId('');
       setTenderInput('');
       setShowNumpad(false);
     } catch (err) {
@@ -167,22 +177,23 @@ export function PosView({
       <div className="flex-1 min-w-0 w-full space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="font-serif-editorial text-3xl font-semibold tracking-tight text-[#151C27]">
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2563EB]">Express Checkout</p>
+            <h1 className="font-serif-editorial text-3xl font-semibold tracking-tight text-[#14213D]">
               Point of Sale
             </h1>
-            <p className="text-sm text-[#6B7280] mt-1">
+            <p className="text-sm text-[#667085] mt-1">
               Tap services or retail items to build the client ticket
             </p>
           </div>
 
           <div className="relative w-full sm:w-72">
-            <Search className="h-4 w-4 text-[#6B7280] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="h-4 w-4 text-[#667085] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search service, retail, SKU..."
-              className="salon-input w-full pl-10 pr-3 text-sm text-[#151C27]"
+              className="salon-input w-full pl-10 pr-3 text-sm text-[#14213D]"
             />
           </div>
         </div>
@@ -199,7 +210,7 @@ export function PosView({
                 className={`h-11 px-4 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-colors border ${
                   active
                     ? 'bg-[#EDE9FE] text-[#6D28D9] border-[#DDD6FE]'
-                    : 'bg-white text-[#4A4455] border-[#E5E7EB] hover:bg-[#F9FAFB]'
+                    : 'bg-white text-[#344054] border-[#E1E7F0] hover:bg-[#F4F7FC]'
                 }`}
               >
                 {category}
@@ -211,8 +222,8 @@ export function PosView({
         {/* Touch Service & Product Grid */}
         {filteredCatalog.length === 0 ? (
           <div className="salon-card rounded-2xl p-10 text-center">
-            <p className="text-sm font-semibold text-[#151C27]">No matching catalog items</p>
-            <p className="text-xs text-[#6B7280] mt-1">
+            <p className="text-sm font-semibold text-[#14213D]">No matching catalog items</p>
+            <p className="text-xs text-[#667085] mt-1">
               Clear your search filter or switch categories to view services.
             </p>
           </div>
@@ -229,7 +240,7 @@ export function PosView({
                   className="salon-card rounded-2xl p-4 text-left hover:border-[#6D28D9] active:scale-[0.98] transition-all flex flex-col justify-between min-h-[124px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div>
-                    <div className="flex items-center justify-between gap-2 text-xs text-[#6B7280]">
+                    <div className="flex items-center justify-between gap-2 text-xs text-[#667085]">
                       <span className="truncate">{item.category}</span>
                       <span className="tabular-ksh shrink-0">
                         {item.kind === 'service'
@@ -237,16 +248,16 @@ export function PosView({
                           : `${item.stock_qty} in stock`}
                       </span>
                     </div>
-                    <p className="text-[15px] font-semibold text-[#151C27] mt-1.5 leading-snug">
+                    <p className="text-[15px] font-semibold text-[#14213D] mt-1.5 leading-snug">
                       {item.name}
                     </p>
-                    <p className="text-xs text-[#6B7280] mt-1 line-clamp-2">
+                    <p className="text-xs text-[#667085] mt-1 line-clamp-2">
                       {item.description}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#E5E7EB]/70">
-                    <span className="tabular-ksh text-base font-bold text-[#151C27]">
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#E1E7F0]/70">
+                    <span className="tabular-ksh text-base font-bold text-[#14213D]">
                       {formatKsh(item.price_ksh)}
                     </span>
                     <span className="h-9 w-9 rounded-lg bg-[#EDE9FE] text-[#6D28D9] flex items-center justify-center">
@@ -263,13 +274,13 @@ export function PosView({
       {/* Right Contextual Running Ticket Drawer (380px on desktop) */}
       <aside className="w-full xl:w-[380px] shrink-0 salon-card rounded-2xl overflow-hidden xl:sticky xl:top-6">
         {/* Deep Plum Drawer Header */}
-        <div className="bg-[#1E152A] text-white p-5 space-y-3">
+        <div className="bg-[#071426] text-white p-5 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-serif-editorial text-xl font-semibold text-white">
                 Running Ticket
               </h2>
-              <p className="text-xs text-[#DAC5FF]/80 mt-0.5">
+              <p className="text-xs text-[#D5E4FF]/80 mt-0.5">
                 {cart.reduce((s, l) => s + l.quantity, 0)} items ·{' '}
                 {linkedAppointmentId ? 'Linked Appointment' : 'Walk-In / Studio'}
               </p>
@@ -289,7 +300,7 @@ export function PosView({
             value={selectedClientId}
             onChange={(e) => onSelectClient(e.target.value)}
             aria-label="Select client for ticket"
-            className="w-full h-11 rounded-lg bg-[#120D1A] border border-white/15 px-3 text-sm font-medium text-white focus:outline-none focus:border-[#7C3AED]"
+            className="w-full h-11 rounded-lg bg-[#071426] border border-white/15 px-3 text-sm font-medium text-white focus:outline-none focus:border-[#7C3AED]"
           >
             <option value="">Walk-In Guest</option>
             {clients.map((c) => (
@@ -298,14 +309,19 @@ export function PosView({
               </option>
             ))}
           </select>
+          {linkedAppointmentId && (
+            <p className="text-[11px] font-medium text-[#D5E4FF]/80">
+              Appointment service and stylist are preloaded. Add retail items or a tip below.
+            </p>
+          )}
         </div>
 
         {/* Scrollable Itemized Lines */}
-        <div className="p-4 max-h-[300px] overflow-y-auto divide-y divide-[#E5E7EB]">
+        <div className="p-4 max-h-[300px] overflow-y-auto divide-y divide-[#E1E7F0]">
           {cart.length === 0 ? (
             <div className="py-10 text-center">
-              <p className="text-sm font-semibold text-[#151C27]">Ticket is empty</p>
-              <p className="text-xs text-[#6B7280] mt-1">
+              <p className="text-sm font-semibold text-[#14213D]">Ticket is empty</p>
+              <p className="text-xs text-[#667085] mt-1">
                 Select services or retail items on the left to begin checkout.
               </p>
             </div>
@@ -314,22 +330,22 @@ export function PosView({
               <div key={line.uid} className="py-3 first:pt-0 last:pb-0 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#151C27] truncate">
+                    <p className="text-sm font-semibold text-[#14213D] truncate">
                       {line.name}
                     </p>
-                    <p className="text-xs text-[#6B7280] tabular-ksh">
+                    <p className="text-xs text-[#667085] tabular-ksh">
                       {formatKsh(line.unit_price_ksh)} each
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="tabular-ksh text-sm font-bold text-[#151C27]">
+                    <span className="tabular-ksh text-sm font-bold text-[#14213D]">
                       {formatKsh(line.unit_price_ksh * line.quantity)}
                     </span>
                     <button
                       type="button"
                       onClick={() => onRemoveLine(line.uid)}
                       aria-label={`Remove ${line.name}`}
-                      className="h-8 w-8 rounded-lg flex items-center justify-center text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2]"
+                      className="h-8 w-8 rounded-lg flex items-center justify-center text-[#667085] hover:text-[#EF4444] hover:bg-[#FEF2F2]"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -341,7 +357,7 @@ export function PosView({
                     value={line.stylist_id}
                     onChange={(e) => onUpdateLineStylist(line.uid, e.target.value)}
                     aria-label={`Stylist for ${line.name}`}
-                    className="h-9 flex-1 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-2 text-xs font-medium text-[#151C27]"
+                    className="h-9 flex-1 rounded-lg border border-[#E1E7F0] bg-[#F4F7FC] px-2 text-xs font-medium text-[#14213D]"
                   >
                     <option value="">Studio / Unattributed</option>
                     {stylists.map((s) => (
@@ -351,12 +367,12 @@ export function PosView({
                     ))}
                   </select>
 
-                  <div className="inline-flex items-center border border-[#E5E7EB] rounded-lg bg-white">
+                  <div className="inline-flex items-center border border-[#E1E7F0] rounded-lg bg-white">
                     <button
                       type="button"
                       onClick={() => onUpdateLineQty(line.uid, -1)}
                       aria-label="Decrease quantity"
-                      className="h-9 w-9 flex items-center justify-center text-[#151C27] hover:bg-[#F9FAFB]"
+                      className="h-9 w-9 flex items-center justify-center text-[#14213D] hover:bg-[#F4F7FC]"
                     >
                       <Minus className="h-3.5 w-3.5" />
                     </button>
@@ -367,7 +383,7 @@ export function PosView({
                       type="button"
                       onClick={() => onUpdateLineQty(line.uid, 1)}
                       aria-label="Increase quantity"
-                      className="h-9 w-9 flex items-center justify-center text-[#151C27] hover:bg-[#F9FAFB]"
+                      className="h-9 w-9 flex items-center justify-center text-[#14213D] hover:bg-[#F4F7FC]"
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
@@ -379,10 +395,50 @@ export function PosView({
         </div>
 
         {/* Discount, Tender & Checkout Summary */}
-        <div className="p-4 border-t border-[#E5E7EB] bg-[#F9FAFB] space-y-4">
+        <div className="p-4 border-t border-[#E1E7F0] bg-[#F4F7FC] space-y-4">
+          <div className="space-y-2 rounded-xl border border-[#E1E7F0] bg-white p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-[#344054]">Optional stylist tip</span>
+              <span className="tabular-ksh text-xs font-bold text-[#14213D]">{formatKsh(tipKsh)}</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {[0, 5, 10].map((percent) => (
+                <button
+                  key={percent}
+                  type="button"
+                  onClick={() => setTipInput(String(Math.round((subtotalKsh * percent) / 100)))}
+                  className="h-9 rounded-lg border border-[#E1E7F0] text-[11px] font-bold text-[#344054] hover:bg-[#F4F7FC]"
+                >
+                  {percent === 0 ? 'No tip' : `${percent}%`}
+                </button>
+              ))}
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={tipInput}
+                onChange={(event) => setTipInput(event.target.value)}
+                aria-label="Custom tip amount in KSh"
+                className="h-9 min-w-0 rounded-lg border border-[#E1E7F0] px-2 text-xs font-bold tabular-ksh"
+              />
+            </div>
+            {tipKsh > 0 && (
+              <select
+                value={tipStylistId}
+                onChange={(event) => setTipStylistId(event.target.value)}
+                aria-label="Stylist receiving tip"
+                className="salon-input w-full px-3 text-xs"
+              >
+                <option value="">Attribute to service stylist</option>
+                {stylists.map((stylist) => (
+                  <option key={stylist.id} value={stylist.id}>{stylist.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
           {/* Quick Discount Selector */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs font-semibold text-[#4A4455]">
+            <div className="flex items-center justify-between text-xs font-semibold text-[#344054]">
               <span>Discount</span>
               <div className="flex gap-1">
                 {[
@@ -403,7 +459,7 @@ export function PosView({
                       className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                         active
                           ? 'bg-[#EDE9FE] text-[#6D28D9]'
-                          : 'bg-white border border-[#E5E7EB] text-[#4A4455]'
+                          : 'bg-white border border-[#E1E7F0] text-[#344054]'
                       }`}
                     >
                       {opt.label}
@@ -430,7 +486,7 @@ export function PosView({
                   className={`h-11 rounded-lg text-xs font-semibold border transition-colors ${
                     active
                       ? 'bg-[#EDE9FE] border-[#6D28D9] text-[#6D28D9]'
-                      : 'bg-white border-[#E5E7EB] text-[#151C27] hover:bg-white/80'
+                      : 'bg-white border-[#E1E7F0] text-[#14213D] hover:bg-white/80'
                   }`}
                 >
                   {method}
@@ -441,9 +497,9 @@ export function PosView({
 
           {/* Cash Touch Tiles & NumPad */}
           {paymentMethod === 'Cash' && (
-            <div className="space-y-2.5 bg-white p-3 rounded-xl border border-[#E5E7EB]">
+            <div className="space-y-2.5 bg-white p-3 rounded-xl border border-[#E1E7F0]">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-[#4A4455]">Cash Tendered</span>
+                <span className="font-semibold text-[#344054]">Cash Tendered</span>
                 <button
                   type="button"
                   onClick={() => setShowNumpad((v) => !v)}
@@ -453,21 +509,21 @@ export function PosView({
                 </button>
               </div>
 
-              <div className="flex items-center h-11 rounded-lg border border-[#E5E7EB] px-3 bg-[#F9FAFB]">
-                <span className="text-xs font-semibold text-[#6B7280] mr-2">KSh</span>
+              <div className="flex items-center h-11 rounded-lg border border-[#E1E7F0] px-3 bg-[#F4F7FC]">
+                <span className="text-xs font-semibold text-[#667085] mr-2">KSh</span>
                 <input
                   type="number"
                   value={tenderInput}
                   onChange={(e) => setTenderInput(e.target.value)}
-                  placeholder={String(totalKsh)}
-                  className="w-full bg-transparent text-sm font-bold text-[#151C27] tabular-ksh focus:outline-none"
+                  placeholder={String(totalWithTipKsh)}
+                  className="w-full bg-transparent text-sm font-bold text-[#14213D] tabular-ksh focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-4 gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setTenderInput(String(totalKsh))}
+                  onClick={() => setTenderInput(String(totalWithTipKsh))}
                   className="h-10 rounded-lg bg-[#EDE9FE] text-[#6D28D9] text-[11px] font-bold"
                 >
                   Exact
@@ -477,7 +533,7 @@ export function PosView({
                     key={amt}
                     type="button"
                     onClick={() => setTenderInput(String(amt))}
-                    className="h-10 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] text-[#151C27] text-[11px] font-bold tabular-ksh hover:bg-[#F3F4F6]"
+                    className="h-10 rounded-lg bg-[#F4F7FC] border border-[#E1E7F0] text-[#14213D] text-[11px] font-bold tabular-ksh hover:bg-[#F1F4F9]"
                   >
                     {amt.toLocaleString('en-KE')}
                   </button>
@@ -491,7 +547,7 @@ export function PosView({
                       key={key}
                       type="button"
                       onClick={() => handleDigit(key)}
-                      className="h-12 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] text-sm font-bold text-[#151C27] active:scale-95 tabular-ksh hover:bg-[#EDE9FE]/50"
+                      className="h-12 rounded-lg bg-[#F4F7FC] border border-[#E1E7F0] text-sm font-bold text-[#14213D] active:scale-95 tabular-ksh hover:bg-[#EDE9FE]/50"
                     >
                       {key}
                     </button>
@@ -500,7 +556,7 @@ export function PosView({
                     type="button"
                     onClick={() => setTenderInput((prev) => prev.slice(0, -1))}
                     aria-label="Backspace"
-                    className="h-12 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB] flex items-center justify-center text-[#151C27] active:scale-95"
+                    className="h-12 rounded-lg bg-[#F4F7FC] border border-[#E1E7F0] flex items-center justify-center text-[#14213D] active:scale-95"
                   >
                     <Delete className="h-4 w-4" />
                   </button>
@@ -508,7 +564,7 @@ export function PosView({
               )}
 
               <div className="flex items-center justify-between text-xs pt-1">
-                <span className="text-[#6B7280]">Change Due</span>
+                <span className="text-[#667085]">Change Due</span>
                 <span className="tabular-ksh font-bold text-[#047857]">
                   {formatKsh(changeKsh)}
                 </span>
@@ -518,12 +574,18 @@ export function PosView({
 
           {/* Totals */}
           <div className="space-y-1.5 text-xs pt-1">
-            <div className="flex justify-between text-[#6B7280]">
+            <div className="flex justify-between text-[#667085]">
               <span>Subtotal</span>
-              <span className="tabular-ksh font-semibold text-[#151C27]">
+              <span className="tabular-ksh font-semibold text-[#14213D]">
                 {formatKsh(subtotalKsh)}
               </span>
             </div>
+            {tipKsh > 0 && (
+              <div className="flex justify-between text-[#6D28D9]">
+                <span>Stylist tip</span>
+                <span className="tabular-ksh font-semibold">{formatKsh(tipKsh)}</span>
+              </div>
+            )}
             {discountKsh > 0 && (
               <div className="flex justify-between text-[#047857]">
                 <span>Discount Applied</span>
@@ -532,16 +594,16 @@ export function PosView({
                 </span>
               </div>
             )}
-            <div className="flex justify-between text-[#6B7280]">
+            <div className="flex justify-between text-[#667085]">
               <span>16% VAT (Included)</span>
               <span className="tabular-ksh">{formatKsh(vatIncludedKsh)}</span>
             </div>
-            <div className="flex items-baseline justify-between pt-2 border-t border-[#E5E7EB]">
-              <span className="font-serif-editorial text-lg font-semibold text-[#151C27]">
+            <div className="flex items-baseline justify-between pt-2 border-t border-[#E1E7F0]">
+              <span className="font-serif-editorial text-lg font-semibold text-[#14213D]">
                 Total Due
               </span>
-              <span className="tabular-ksh text-xl font-bold text-[#151C27]">
-                {formatKsh(totalKsh)}
+              <span className="tabular-ksh text-xl font-bold text-[#14213D]">
+                {formatKsh(totalWithTipKsh)}
               </span>
             </div>
           </div>
@@ -558,23 +620,23 @@ export function PosView({
             onClick={handleSettle}
             className="w-full h-12 rounded-lg bg-[#6D28D9] hover:bg-[#5B21B6] active:scale-[0.98] text-white text-sm font-semibold transition-all disabled:opacity-50"
           >
-            {settling ? 'Processing Settlement...' : `Settle Ticket · ${formatKsh(totalKsh)}`}
+            {settling ? 'Processing Settlement...' : `Settle Ticket · ${formatKsh(totalWithTipKsh)}`}
           </button>
         </div>
       </aside>
 
       {/* Boutique Receipt Modal */}
       {receiptTicket && (
-        <div className="fixed inset-0 z-50 bg-[#120D1A]/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-[#071426]/60 flex items-center justify-center p-4">
           <div className="salon-sheet rounded-2xl w-full max-w-md p-6 space-y-5 bg-white">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="h-6 w-6 text-[#10B981]" />
                 <div>
-                  <h3 className="font-serif-editorial text-xl font-semibold text-[#151C27]">
+                  <h3 className="font-serif-editorial text-xl font-semibold text-[#14213D]">
                     Payment Settled
                   </h3>
-                  <p className="text-xs text-[#6B7280] tabular-ksh">
+                  <p className="text-xs text-[#667085] tabular-ksh">
                     {receiptTicket.ticket_number} · {receiptTicket.payment_method}
                   </p>
                 </div>
@@ -583,27 +645,27 @@ export function PosView({
                 type="button"
                 onClick={() => setReceiptTicket(null)}
                 aria-label="Close receipt"
-                className="h-9 w-9 rounded-lg flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6] no-print"
+                className="h-9 w-9 rounded-lg flex items-center justify-center text-[#667085] hover:bg-[#F1F4F9] no-print"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="border-y border-dashed border-[#E5E7EB] py-4 space-y-2.5 text-xs">
+            <div className="border-y border-dashed border-[#E1E7F0] py-4 space-y-2.5 text-xs">
               <div className="flex justify-between">
-                <span className="text-[#6B7280]">Client</span>
-                <span className="font-semibold text-[#151C27]">
+                <span className="text-[#667085]">Client</span>
+                <span className="font-semibold text-[#14213D]">
                   {receiptTicket.client_name}
                 </span>
               </div>
               <div className="space-y-1.5 pt-2">
                 {receiptTicket.items.map((it) => (
                   <div key={it.id} className="flex justify-between gap-2">
-                    <span className="text-[#151C27]">
+                    <span className="text-[#14213D]">
                       {it.quantity}x {it.item_name}
                       {it.stylist_name ? ` (${it.stylist_name.split(' ')[0]})` : ''}
                     </span>
-                    <span className="tabular-ksh font-semibold text-[#151C27]">
+                    <span className="tabular-ksh font-semibold text-[#14213D]">
                       {formatKsh(it.line_total_ksh)}
                     </span>
                   </div>
@@ -618,11 +680,11 @@ export function PosView({
                   <span className="tabular-ksh">- {formatKsh(receiptTicket.discount_ksh)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-[#6B7280]">
+              <div className="flex justify-between text-[#667085]">
                 <span>VAT (16% Included)</span>
                 <span className="tabular-ksh">{formatKsh(receiptTicket.tax_ksh)}</span>
               </div>
-              <div className="flex justify-between text-base font-bold text-[#151C27] pt-1">
+              <div className="flex justify-between text-base font-bold text-[#14213D] pt-1">
                 <span>Total Paid</span>
                 <span className="tabular-ksh">{formatKsh(receiptTicket.total_ksh)}</span>
               </div>
@@ -638,7 +700,7 @@ export function PosView({
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="flex-1 h-11 rounded-lg border border-[#E5E7EB] bg-white text-sm font-semibold text-[#151C27] hover:bg-[#F9FAFB] inline-flex items-center justify-center gap-2"
+                className="flex-1 h-11 rounded-lg border border-[#E1E7F0] bg-white text-sm font-semibold text-[#14213D] hover:bg-[#F4F7FC] inline-flex items-center justify-center gap-2"
               >
                 <Printer className="h-4 w-4" />
                 Print Receipt

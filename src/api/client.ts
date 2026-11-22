@@ -1,15 +1,23 @@
 import type {
   Appointment,
   AppointmentStatus,
+  AuditLogEntry,
   BootstrapPayload,
+  BusinessSettings,
   CatalogItem,
   Client,
+  DailyRevenuePoint,
   PaymentMethod,
+  AuthStatus,
+  StaffUser,
+  SupportRequest,
+  SupportRequestStatus,
   Ticket,
 } from '../types';
 
 async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
       ...(options?.headers || {}),
@@ -46,8 +54,87 @@ export function offsetIsoDate(baseIso: string, deltaDays: number): string {
 }
 
 export const salonApi = {
+  authStatus(): Promise<AuthStatus> {
+    return apiRequest<AuthStatus>('/api/auth/status');
+  },
+
+  setupAdmin(payload: { name: string; username: string; email: string; password: string }): Promise<{ user: StaffUser }> {
+    return apiRequest('/api/auth/setup', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  login(payload: { username: string; password: string; role: 'admin' | 'employee' }): Promise<{ user: StaffUser }> {
+    return apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  logout(): Promise<{ logged_out: boolean }> {
+    return apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+  },
+
+  listEmployees(): Promise<{ employees: StaffUser[] }> {
+    return apiRequest('/api/employees');
+  },
+
+  createEmployee(payload: { name: string; username: string; email: string; password: string; stylist_id: string }): Promise<{ employee: StaffUser }> {
+    return apiRequest('/api/employees', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  updateEmployee(id: string, payload: { active?: boolean; stylist_id?: string }): Promise<{ employee: StaffUser }> {
+    return apiRequest(`/api/employees/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateBusinessSettings(payload: Pick<BusinessSettings, 'business_name' | 'phone' | 'email' | 'address' | 'opening_time' | 'closing_time'>): Promise<{ settings: BusinessSettings }> {
+    return apiRequest('/api/settings/business', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  changePassword(payload: { current_password: string; new_password: string }): Promise<{ changed: boolean }> {
+    return apiRequest('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  listAuditLogs(date: string): Promise<{ entries: AuditLogEntry[] }> {
+    return apiRequest(`/api/audit-logs?date=${encodeURIComponent(date)}`);
+  },
+
+  listSupportRequests(): Promise<{ requests: SupportRequest[] }> {
+    return apiRequest('/api/support/requests');
+  },
+
+  createSupportRequest(payload: {
+    category: string;
+    priority: SupportRequest['priority'];
+    subject: string;
+    message: string;
+  }): Promise<{ request: SupportRequest }> {
+    return apiRequest('/api/support/requests', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateSupportRequest(
+    id: string,
+    payload: { status: SupportRequestStatus; admin_reply: string }
+  ): Promise<{ request: SupportRequest }> {
+    return apiRequest(`/api/support/requests/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
   bootstrap(date: string): Promise<BootstrapPayload> {
     return apiRequest<BootstrapPayload>(`/api/bootstrap?date=${encodeURIComponent(date)}`);
+  },
+
+  analyticsTrend(date: string, days = 30): Promise<{ date: string; days: number; points: DailyRevenuePoint[] }> {
+    return apiRequest(`/api/analytics/trend?date=${encodeURIComponent(date)}&days=${days}`);
   },
 
   createAppointment(payload: {
@@ -158,6 +245,8 @@ export const salonApi = {
     client_name: string;
     appointment_id?: string;
     payment_method: PaymentMethod;
+    tip_ksh?: number;
+    tip_stylist_id?: string;
     discount_type: 'none' | 'percent' | 'fixed';
     discount_value: number;
     tendered_ksh: number;

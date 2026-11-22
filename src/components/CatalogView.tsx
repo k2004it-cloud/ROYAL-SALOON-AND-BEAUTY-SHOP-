@@ -5,6 +5,7 @@ import { formatKsh } from '../api/client';
 import { StatusBadge } from './StatusBadge';
 
 interface CatalogViewProps {
+  initialTab?: 'service' | 'product';
   catalog: CatalogItem[];
   onCreateItem: (payload: {
     kind: 'service' | 'product';
@@ -26,11 +27,12 @@ const SERVICE_CATEGORIES = [
 ];
 
 export function CatalogView({
+  initialTab = 'service',
   catalog,
   onCreateItem,
   onAdjustStock,
 }: CatalogViewProps) {
-  const [tab, setTab] = useState<'service' | 'product'>('service');
+  const [tab, setTab] = useState<'service' | 'product'>(initialTab);
   const [modalOpen, setModalOpen] = useState(false);
 
   const [kind, setKind] = useState<'service' | 'product'>('service');
@@ -92,18 +94,23 @@ export function CatalogView({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-serif-editorial text-3xl font-semibold tracking-tight text-[#151C27]">
-            Services & Retail Stock
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2563EB]">
+            {tab === 'service' ? 'Atelier Menu' : 'Stock Management'}
+          </p>
+          <h1 className="font-serif-editorial text-3xl font-semibold tracking-tight text-[#14213D]">
+            {tab === 'service' ? 'Services & Products' : 'Inventory'}
           </h1>
-          <p className="text-sm text-[#6B7280] mt-1">
-            Manage salon service rates, durations, and boutique retail inventory
+          <p className="text-sm text-[#667085] mt-1">
+            {tab === 'service'
+              ? 'Manage salon service rates, durations, and available products'
+              : 'Review product quantities, low-stock alerts, and stock adjustments'}
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => openModal(tab)}
-          className="h-11 px-5 rounded-lg bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-sm font-semibold inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+          className="h-11 px-5 rounded-lg bg-gradient-to-r from-[#0D6EFD] to-[#0B5ED7] text-white text-sm font-semibold inline-flex items-center gap-2 whitespace-nowrap shrink-0 shadow-[0_10px_22px_-12px_rgba(13,110,253,0.28)]"
         >
           <Plus className="h-4 w-4" />
           {tab === 'service' ? 'Add Service' : 'Add Retail Product'}
@@ -133,14 +140,14 @@ export function CatalogView({
       )}
 
       {/* Segmented Switch */}
-      <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white border border-[#E5E7EB]">
+      <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white border border-[#E1E7F0]">
         <button
           type="button"
           onClick={() => setTab('service')}
           className={`h-10 px-4 rounded-lg text-xs font-semibold transition-colors ${
             tab === 'service'
               ? 'bg-[#EDE9FE] text-[#6D28D9]'
-              : 'text-[#4A4455] hover:bg-[#F9FAFB]'
+              : 'text-[#344054] hover:bg-[#F4F7FC]'
           }`}
         >
           Service Menu ({catalog.filter((i) => i.kind === 'service').length})
@@ -151,7 +158,7 @@ export function CatalogView({
           className={`h-10 px-4 rounded-lg text-xs font-semibold transition-colors ${
             tab === 'product'
               ? 'bg-[#EDE9FE] text-[#6D28D9]'
-              : 'text-[#4A4455] hover:bg-[#F9FAFB]'
+              : 'text-[#344054] hover:bg-[#F4F7FC]'
           }`}
         >
           Retail Stock ({catalog.filter((i) => i.kind === 'product').length})
@@ -163,7 +170,7 @@ export function CatalogView({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#F9FAFB] border-b border-[#E5E7EB] text-xs font-semibold text-[#6B7280]">
+              <tr className="bg-[#F4F7FC] border-b border-[#E1E7F0] text-xs font-semibold text-[#667085]">
                 <th className="py-3.5 px-5">SKU</th>
                 <th className="py-3.5 px-5">Name & Notes</th>
                 <th className="py-3.5 px-5">Category</th>
@@ -174,32 +181,32 @@ export function CatalogView({
                 {tab === 'product' && <th className="py-3.5 px-5 text-right">Adjust Stock</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E7EB] text-sm">
+            <tbody className="divide-y divide-[#E1E7F0] text-sm">
               {items.map((item) => {
                 const isLow = item.kind === 'product' && item.stock_qty <= 5;
                 return (
-                  <tr key={item.id} className="hover:bg-[#F9FAFB] transition-colors">
-                    <td className="py-3.5 px-5 text-xs font-semibold text-[#6B7280] tabular-ksh whitespace-nowrap">
+                  <tr key={item.id} className="hover:bg-[#F4F7FC] transition-colors">
+                    <td className="py-3.5 px-5 text-xs font-semibold text-[#667085] tabular-ksh whitespace-nowrap">
                       {item.sku}
                     </td>
                     <td className="py-3.5 px-5">
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="font-semibold text-[#151C27]">{item.name}</span>
+                        <span className="font-semibold text-[#14213D]">{item.name}</span>
                         {isLow && <StatusBadge status="Low Stock" />}
                       </div>
                       {item.description && (
-                        <p className="text-xs text-[#6B7280] mt-0.5">{item.description}</p>
+                        <p className="text-xs text-[#667085] mt-0.5">{item.description}</p>
                       )}
                     </td>
-                    <td className="py-3.5 px-5 text-xs font-medium text-[#4A4455] whitespace-nowrap">
+                    <td className="py-3.5 px-5 text-xs font-medium text-[#344054] whitespace-nowrap">
                       {item.category}
                     </td>
-                    <td className="py-3.5 px-5 text-right tabular-ksh font-semibold text-[#151C27] whitespace-nowrap">
+                    <td className="py-3.5 px-5 text-right tabular-ksh font-semibold text-[#14213D] whitespace-nowrap">
                       {tab === 'service'
                         ? `${item.duration_min} mins`
                         : `${item.stock_qty} units`}
                     </td>
-                    <td className="py-3.5 px-5 text-right tabular-ksh font-bold text-[#151C27] whitespace-nowrap">
+                    <td className="py-3.5 px-5 text-right tabular-ksh font-bold text-[#14213D] whitespace-nowrap">
                       {formatKsh(item.price_ksh)}
                     </td>
                     {tab === 'product' && (
@@ -210,7 +217,7 @@ export function CatalogView({
                             onClick={() => onAdjustStock(item.id, -1)}
                             disabled={item.stock_qty <= 0}
                             aria-label={`Decrease stock for ${item.name}`}
-                            className="h-9 w-9 rounded-lg border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] flex items-center justify-center text-[#151C27] disabled:opacity-40"
+                            className="h-9 w-9 rounded-lg border border-[#E1E7F0] bg-white hover:bg-[#F4F7FC] flex items-center justify-center text-[#14213D] disabled:opacity-40"
                           >
                             <Minus className="h-3.5 w-3.5" />
                           </button>
@@ -234,17 +241,17 @@ export function CatalogView({
 
       {/* Add Catalog Item Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#120D1A]/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-[#071426]/50 flex items-center justify-center p-4">
           <div className="salon-sheet rounded-2xl w-full max-w-lg p-6 space-y-5">
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-4">
-              <h2 className="font-serif-editorial text-2xl font-semibold text-[#151C27]">
+            <div className="flex items-center justify-between border-b border-[#E1E7F0] pb-4">
+              <h2 className="font-serif-editorial text-2xl font-semibold text-[#14213D]">
                 {kind === 'service' ? 'Add Salon Service' : 'Add Retail Product'}
               </h2>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
                 aria-label="Close modal"
-                className="h-10 w-10 rounded-lg flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6]"
+                className="h-10 w-10 rounded-lg flex items-center justify-center text-[#667085] hover:bg-[#F1F4F9]"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -264,7 +271,7 @@ export function CatalogView({
                   className={`h-11 rounded-lg text-xs font-semibold border ${
                     kind === 'service'
                       ? 'bg-[#EDE9FE] border-[#6D28D9] text-[#6D28D9]'
-                      : 'bg-white border-[#E5E7EB] text-[#151C27]'
+                      : 'bg-white border-[#E1E7F0] text-[#14213D]'
                   }`}
                 >
                   Service
@@ -275,7 +282,7 @@ export function CatalogView({
                   className={`h-11 rounded-lg text-xs font-semibold border ${
                     kind === 'product'
                       ? 'bg-[#EDE9FE] border-[#6D28D9] text-[#6D28D9]'
-                      : 'bg-white border-[#E5E7EB] text-[#151C27]'
+                      : 'bg-white border-[#E1E7F0] text-[#14213D]'
                   }`}
                 >
                   Retail Product
@@ -283,7 +290,7 @@ export function CatalogView({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                   Item Name
                 </label>
                 <input
@@ -291,19 +298,19 @@ export function CatalogView({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="salon-input w-full px-3 text-sm text-[#151C27]"
+                  className="salon-input w-full px-3 text-sm text-[#14213D]"
                 />
               </div>
 
               {kind === 'service' && (
                 <div>
-                  <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                  <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                     Service Category
                   </label>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="salon-input w-full px-3 text-sm text-[#151C27]"
+                    className="salon-input w-full px-3 text-sm text-[#14213D]"
                   >
                     {SERVICE_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
@@ -316,25 +323,25 @@ export function CatalogView({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                  <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                     Price (KSh)
                   </label>
                   <div className="flex items-center salon-input px-3">
-                    <span className="text-xs font-semibold text-[#6B7280] mr-2">KSh</span>
+                    <span className="text-xs font-semibold text-[#667085] mr-2">KSh</span>
                     <input
                       type="number"
                       min={1}
                       value={priceKsh}
                       onChange={(e) => setPriceKsh(e.target.value)}
                       required
-                      className="w-full bg-transparent text-sm font-bold text-[#151C27] tabular-ksh focus:outline-none"
+                      className="w-full bg-transparent text-sm font-bold text-[#14213D] tabular-ksh focus:outline-none"
                     />
                   </div>
                 </div>
 
                 {kind === 'service' ? (
                   <div>
-                    <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                    <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                       Duration (minutes)
                     </label>
                     <input
@@ -344,12 +351,12 @@ export function CatalogView({
                       value={durationMin}
                       onChange={(e) => setDurationMin(e.target.value)}
                       required
-                      className="salon-input w-full px-3 text-sm text-[#151C27] tabular-ksh"
+                      className="salon-input w-full px-3 text-sm text-[#14213D] tabular-ksh"
                     />
                   </div>
                 ) : (
                   <div>
-                    <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                    <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                       Initial Stock
                     </label>
                     <input
@@ -358,14 +365,14 @@ export function CatalogView({
                       value={stockQty}
                       onChange={(e) => setStockQty(e.target.value)}
                       required
-                      className="salon-input w-full px-3 text-sm text-[#151C27] tabular-ksh"
+                      className="salon-input w-full px-3 text-sm text-[#14213D] tabular-ksh"
                     />
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                   Description
                 </label>
                 <input
@@ -373,7 +380,7 @@ export function CatalogView({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Short service protocol or bottle size"
-                  className="salon-input w-full px-3 text-sm text-[#151C27]"
+                  className="salon-input w-full px-3 text-sm text-[#14213D]"
                 />
               </div>
 
@@ -381,7 +388,7 @@ export function CatalogView({
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="h-11 px-4 rounded-lg border border-[#E5E7EB] bg-white text-sm font-semibold text-[#151C27]"
+                  className="h-11 px-4 rounded-lg border border-[#E1E7F0] bg-white text-sm font-semibold text-[#14213D]"
                 >
                   Cancel
                 </button>

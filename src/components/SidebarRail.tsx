@@ -1,62 +1,116 @@
 import {
   CalendarDays,
+  ClipboardList,
   CreditCard,
+  LayoutDashboard,
   Users,
   Sparkles,
-  ReceiptText,
+  UsersRound,
+  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Crown,
+  WalletCards,
+  ClipboardCheck,
+  Bell,
+  Clock3,
+  PackageSearch,
+  BarChart3,
+  Settings,
+  Database,
+  CircleHelp,
 } from 'lucide-react';
-import type { WorkspaceTab } from '../types';
-import { formatKsh } from '../api/client';
+import type { StaffUser, WorkspaceTab } from '../types';
 
 interface SidebarRailProps {
   activeTab: WorkspaceTab;
+  businessName: string;
   onSelectTab: (tab: WorkspaceTab) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
-  todayRevenueKsh: number;
   cartCount: number;
   lowStockCount: number;
+  supportRequestCount: number;
+  user: StaffUser;
+  onLogout: () => void;
 }
 
-const NAV_ITEMS: Array<{
+const ADMIN_NAV_ITEMS: Array<{
   id: WorkspaceTab;
   label: string;
   shortLabel: string;
   Icon: typeof CalendarDays;
 }> = [
-  { id: 'schedule', label: 'Master Schedule', shortLabel: 'Schedule', Icon: CalendarDays },
-  { id: 'pos', label: 'Point of Sale', shortLabel: 'POS', Icon: CreditCard },
-  { id: 'clients', label: 'Clients & Formulas', shortLabel: 'Clients', Icon: Users },
-  { id: 'catalog', label: 'Services & Stock', shortLabel: 'Services', Icon: Sparkles },
-  { id: 'ledger', label: 'Financial Ledger', shortLabel: 'Ledger', Icon: ReceiptText },
+  { id: 'dashboard', label: 'Dashboard', shortLabel: 'Dashboard', Icon: LayoutDashboard },
+  { id: 'clients', label: 'Clients', shortLabel: 'Clients', Icon: Users },
+  { id: 'employees', label: 'Employees', shortLabel: 'Employees', Icon: UsersRound },
+  { id: 'catalog', label: 'Services & Products', shortLabel: 'Services', Icon: Sparkles },
+  { id: 'schedule', label: 'Appointments', shortLabel: 'Bookings', Icon: CalendarDays },
+  { id: 'pos', label: 'Sales & Payments', shortLabel: 'Sales', Icon: CreditCard },
+  { id: 'inventory', label: 'Inventory', shortLabel: 'Inventory', Icon: PackageSearch },
+  { id: 'reports', label: 'Reports', shortLabel: 'Reports', Icon: BarChart3 },
+  { id: 'settings', label: 'Settings', shortLabel: 'Settings', Icon: Settings },
+  { id: 'system-logs', label: 'System Logs', shortLabel: 'Logs', Icon: ClipboardList },
+  { id: 'backups', label: 'Backups', shortLabel: 'Backups', Icon: Database },
+  { id: 'support', label: 'Support & Help', shortLabel: 'Help', Icon: CircleHelp },
+];
+
+const EMPLOYEE_NAV_ITEMS: Array<{
+  id: WorkspaceTab;
+  label: string;
+  shortLabel: string;
+  Icon: typeof CalendarDays;
+}> = [
+  { id: 'my-day', label: 'Staff Dashboard', shortLabel: 'Dashboard', Icon: LayoutDashboard },
+  { id: 'my-appointments', label: 'My Appointments', shortLabel: 'Bookings', Icon: CalendarDays },
+  { id: 'clients', label: 'Services & Clients', shortLabel: 'Clients', Icon: Users },
+  { id: 'pos', label: 'Sales & Payments', shortLabel: 'Sales', Icon: CreditCard },
+  { id: 'inventory', label: 'Inventory', shortLabel: 'Inventory', Icon: PackageSearch },
+  { id: 'profile', label: 'My Profile', shortLabel: 'Profile', Icon: UsersRound },
+  { id: 'notifications', label: 'Notifications', shortLabel: 'Alerts', Icon: Bell },
+  { id: 'reports', label: 'Reports', shortLabel: 'Reports', Icon: BarChart3 },
+  { id: 'support', label: 'Help & Support', shortLabel: 'Help', Icon: CircleHelp },
 ];
 
 export function SidebarRail({
   activeTab,
+  businessName,
   onSelectTab,
   collapsed,
   onToggleCollapse,
-  todayRevenueKsh,
   cartCount,
   lowStockCount,
+  supportRequestCount,
+  user,
+  onLogout,
 }: SidebarRailProps) {
+  const visibleNavItems = user.role === 'admin' ? ADMIN_NAV_ITEMS : EMPLOYEE_NAV_ITEMS;
+
   return (
     <>
-      {/* Desktop Deep-Plum Navigation Rail */}
+      {/* Desktop Beauty Boutique Navigation Rail */}
       <aside
-        className={`no-print hidden md:flex flex-col justify-between bg-[#1E152A] text-[#F9FAFB] shrink-0 transition-[width] duration-200 border-r border-[#2D213D] ${
+        className={`no-print hidden md:flex flex-col justify-between text-[#F4F7FC] shrink-0 transition-[width] duration-200 border-r border-[#10284E] shadow-[12px_0_30px_-24px_rgba(8,27,54,0.36)] ${
           collapsed ? 'w-[80px]' : 'w-[248px]'
-        }`}
+        } beauty-sidebar`}
       >
-        <div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {/* Brand Lockup */}
-          <div className="flex items-center justify-between px-5 h-[72px] border-b border-white/10">
+          <div className="flex items-center justify-between px-5 h-[78px] border-b border-white/10">
             {!collapsed ? (
-              <span className="font-serif-editorial text-2xl font-semibold tracking-tight text-white whitespace-nowrap">
-                Salon Pro
-              </span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="h-9 w-9 rounded-full border border-[#B7D2FF]/60 bg-white/10 flex items-center justify-center text-[#F4B629] shrink-0">
+                  <Crown className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <span className="block max-w-full truncate font-serif-editorial text-lg font-semibold italic leading-none text-[#F4B629]">
+                    {businessName}
+                  </span>
+                  <span className="block mt-1 text-[9px] uppercase tracking-[0.22em] text-[#B7D2FF]">
+                    Beauty & Atelier
+                  </span>
+                </div>
+              </div>
             ) : (
               <span className="font-serif-editorial text-xl font-semibold text-white mx-auto">
                 SP
@@ -67,7 +121,7 @@ export function SidebarRail({
                 type="button"
                 onClick={onToggleCollapse}
                 aria-label="Collapse navigation"
-                className="h-9 w-9 flex items-center justify-center rounded-lg text-[#DAC5FF]/80 hover:text-white hover:bg-white/10 transition-colors"
+                className="h-9 w-9 flex items-center justify-center rounded-lg text-[#D5E4FF]/80 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <PanelLeftClose className="h-4 w-4" />
               </button>
@@ -80,7 +134,7 @@ export function SidebarRail({
                 type="button"
                 onClick={onToggleCollapse}
                 aria-label="Expand navigation"
-                className="h-10 w-10 flex items-center justify-center rounded-lg text-[#DAC5FF]/80 hover:text-white hover:bg-white/10 transition-colors"
+                className="h-10 w-10 flex items-center justify-center rounded-lg text-[#D5E4FF]/80 hover:text-white hover:bg-white/10 transition-colors"
               >
                 <PanelLeftOpen className="h-4 w-4" />
               </button>
@@ -89,14 +143,14 @@ export function SidebarRail({
 
           {/* Navigation Items */}
           <nav className="p-3 space-y-1.5" aria-label="Primary Navigation">
-            {NAV_ITEMS.map(({ id, label, Icon }) => {
+            {visibleNavItems.map(({ id, label, Icon }) => {
               const isActive = activeTab === id;
               const badgeCount =
                 id === 'pos' && cartCount > 0
                   ? cartCount
-                  : id === 'catalog' && lowStockCount > 0
+                  : id === 'inventory' && lowStockCount > 0
                     ? lowStockCount
-                    : 0;
+                    : id === 'support' ? supportRequestCount : 0;
 
               return (
                 <button
@@ -106,8 +160,8 @@ export function SidebarRail({
                   title={collapsed ? label : undefined}
                   className={`w-full min-h-[44px] flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors whitespace-nowrap ${
                     isActive
-                      ? 'bg-[#6D28D9] text-white'
-                      : 'text-[#DAC5FF]/85 hover:bg-white/10 hover:text-white'
+                      ? 'bg-gradient-to-r from-[#1479FF] to-[#0757D8] text-white shadow-[0_8px_18px_-10px_rgba(13,110,253,0.45)]'
+                      : 'text-[#DCEBFF]/85 hover:bg-white/10 hover:text-white'
                   } ${collapsed ? 'justify-center px-0' : 'justify-between'}`}
                 >
                   <span className="flex items-center gap-3 min-w-0">
@@ -117,7 +171,7 @@ export function SidebarRail({
                   {!collapsed && badgeCount > 0 && (
                     <span
                       className={`rounded-full px-2 py-0.5 text-[11px] font-bold tabular-ksh ${
-                        id === 'catalog'
+                        id === 'inventory'
                           ? 'bg-[#FFFBEB] text-[#B45309]'
                           : 'bg-white/20 text-white'
                       }`}
@@ -131,42 +185,41 @@ export function SidebarRail({
           </nav>
         </div>
 
-        {/* Daily Drawer Summary */}
-        <div className="p-4 border-t border-white/10 bg-[#120D1A]">
-          {!collapsed ? (
-            <div className="space-y-1">
-              <p className="text-[11px] font-bold tracking-[0.04em] text-[#DAC5FF]/70">
-                Daily Settled Takings
-              </p>
-              <p className="tabular-ksh text-lg font-bold text-white">
-                {formatKsh(todayRevenueKsh)}
-              </p>
-            </div>
-          ) : (
-            <div className="text-center">
-              <p className="text-[10px] font-bold text-[#DAC5FF]/70">KSh</p>
-              <p className="tabular-ksh text-xs font-bold text-white truncate">
-                {Math.round(todayRevenueKsh / 1000)}k
+        <div className={`flex items-center gap-2 border-t border-white/10 bg-[#081B36]/70 p-4 ${collapsed ? 'justify-center' : 'justify-between'}`}>
+          {!collapsed && (
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-bold text-white">{user.name}</p>
+              <p className="text-[9px] uppercase tracking-[0.12em] text-[#D5E4FF]/70">
+                {user.role === 'admin' ? 'Owner / Admin' : 'Employee'}
               </p>
             </div>
           )}
+          <button
+            type="button"
+            onClick={onLogout}
+            aria-label="Sign out"
+            title={collapsed ? 'Sign out' : undefined}
+            className="h-9 w-9 shrink-0 rounded-lg text-[#D5E4FF]/80 hover:bg-white/10 hover:text-white"
+          >
+            <LogOut className="mx-auto h-4 w-4" />
+          </button>
         </div>
       </aside>
 
       {/* Mobile Compact Bottom Bar (<= 15% viewport height) */}
       <nav
         aria-label="Mobile Navigation"
-        className="no-print md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#1E152A] border-t border-white/10 grid grid-cols-5 h-16 px-1"
+        className="no-print md:hidden fixed bottom-0 inset-x-0 z-40 beauty-sidebar border-t border-white/10 flex h-16 overflow-x-auto px-1"
       >
-        {NAV_ITEMS.map(({ id, shortLabel, Icon }) => {
+        {visibleNavItems.map(({ id, shortLabel, Icon }) => {
           const isActive = activeTab === id;
           return (
             <button
               key={id}
               type="button"
               onClick={() => onSelectTab(id)}
-              className={`flex flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-semibold transition-colors ${
-                isActive ? 'text-white bg-[#6D28D9]/80' : 'text-[#DAC5FF]/75'
+              className={`flex min-w-[72px] flex-1 flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                isActive ? 'text-white bg-[#0D6EFD]/90' : 'text-[#DCEBFF]/75'
               }`}
             >
               <Icon className="h-4 w-4 shrink-0" />

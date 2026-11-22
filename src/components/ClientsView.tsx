@@ -25,6 +25,7 @@ interface ClientsViewProps {
     }>
   ) => Promise<void>;
   onOpenPosForClient: (clientId: string) => void;
+  showFinancials: boolean;
 }
 
 export function ClientsView({
@@ -33,6 +34,7 @@ export function ClientsView({
   onCreateClient,
   onUpdateClient,
   onOpenPosForClient,
+  showFinancials,
 }: ClientsViewProps) {
   const [query, setQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -118,29 +120,30 @@ export function ClientsView({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="font-serif-editorial text-3xl font-semibold tracking-tight text-[#151C27]">
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2563EB]">Guest Experience</p>
+          <h1 className="font-serif-editorial text-3xl font-semibold tracking-tight text-[#14213D]">
             Clients & Formulas
           </h1>
-          <p className="text-sm text-[#6B7280] mt-1">
+          <p className="text-sm text-[#667085] mt-1">
             {clients.length} client profiles with color formulas, texture notes, and visit spend
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative w-full sm:w-72">
-            <Search className="h-4 w-4 text-[#6B7280] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="h-4 w-4 text-[#667085] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search name, phone, formula..."
-              className="salon-input w-full pl-10 pr-3 text-sm text-[#151C27]"
+              className="salon-input w-full pl-10 pr-3 text-sm text-[#14213D]"
             />
           </div>
           <button
             type="button"
             onClick={openNewModal}
-            className="h-11 px-5 rounded-lg bg-[#6D28D9] hover:bg-[#5B21B6] text-white text-sm font-semibold inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+            className="h-11 px-5 rounded-lg bg-gradient-to-r from-[#0D6EFD] to-[#0B5ED7] text-white text-sm font-semibold inline-flex items-center gap-2 whitespace-nowrap shrink-0 shadow-[0_10px_22px_-12px_rgba(13,110,253,0.28)]"
           >
             <Plus className="h-4 w-4" />
             Add Client
@@ -151,8 +154,8 @@ export function ClientsView({
       {/* Client Cards Grid */}
       {filtered.length === 0 ? (
         <div className="salon-card rounded-2xl p-10 text-center">
-          <p className="text-sm font-semibold text-[#151C27]">No client profiles match your search</p>
-          <p className="text-xs text-[#6B7280] mt-1">
+          <p className="text-sm font-semibold text-[#14213D]">No client profiles match your search</p>
+          <p className="text-xs text-[#667085] mt-1">
             Try another query or create a new boutique client profile.
           </p>
         </div>
@@ -168,10 +171,10 @@ export function ClientsView({
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h2 className="font-serif-editorial text-xl font-semibold text-[#151C27] truncate">
+                      <h2 className="font-serif-editorial text-xl font-semibold text-[#14213D] truncate">
                         {client.name}
                       </h2>
-                      <p className="text-xs text-[#6B7280] mt-0.5 tabular-ksh">
+                      <p className="text-xs text-[#667085] mt-0.5 tabular-ksh">
                         {client.phone}
                         {client.email ? ` · ${client.email}` : ''}
                       </p>
@@ -179,49 +182,49 @@ export function ClientsView({
                     <button
                       type="button"
                       onClick={() => openEditModal(client)}
-                      className="h-9 px-3 rounded-lg border border-[#E5E7EB] text-xs font-semibold text-[#151C27] hover:bg-[#F9FAFB] shrink-0"
+                      className="h-9 px-3 rounded-lg border border-[#E1E7F0] text-xs font-semibold text-[#14213D] hover:bg-[#F4F7FC] shrink-0"
                     >
                       Edit
                     </button>
                   </div>
 
                   {/* Formula Notes */}
-                  <div className="rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] p-3">
-                    <p className="text-[11px] font-bold tracking-[0.03em] text-[#6B7280]">
+                  <div className="rounded-xl bg-[#F4F7FC] border border-[#E1E7F0] p-3">
+                    <p className="text-[11px] font-bold tracking-[0.03em] text-[#667085]">
                       Studio Formula & Notes
                     </p>
-                    <p className="text-xs text-[#151C27] mt-1 leading-relaxed">
+                    <p className="text-xs text-[#14213D] mt-1 leading-relaxed">
                       {client.formula_notes || 'No formula notes recorded yet.'}
                     </p>
                   </div>
                 </div>
 
-                <div className="space-y-3 pt-2 border-t border-[#E5E7EB]">
+                <div className="space-y-3 pt-2 border-t border-[#E1E7F0]">
                   <div className="flex items-center justify-between text-xs">
                     <div>
-                      <span className="text-[#6B7280]">Visits: </span>
-                      <span className="font-bold text-[#151C27] tabular-ksh">
+                      <span className="text-[#667085]">Visits: </span>
+                      <span className="font-bold text-[#14213D] tabular-ksh">
                         {client.visit_count}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-[#6B7280]">Lifetime: </span>
-                      <span className="font-bold text-[#151C27] tabular-ksh">
+                    {showFinancials && <div>
+                      <span className="text-[#667085]">Lifetime: </span>
+                      <span className="font-bold text-[#14213D] tabular-ksh">
                         {formatKsh(client.total_spent_ksh)}
                       </span>
-                    </div>
+                    </div>}
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
                     {pref ? (
                       <div className="flex items-center gap-2 min-w-0">
                         <StylistAvatar src={pref.avatar_url} name={pref.name} size="sm" />
-                        <span className="text-xs font-medium text-[#4A4455] truncate">
+                        <span className="text-xs font-medium text-[#344054] truncate">
                           {pref.name}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-xs text-[#6B7280]">Any Stylist</span>
+                      <span className="text-xs text-[#667085]">Any Stylist</span>
                     )}
 
                     <button
@@ -242,17 +245,17 @@ export function ClientsView({
 
       {/* Client Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#120D1A]/50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-[#071426]/50 flex items-center justify-center p-4">
           <div className="salon-sheet rounded-2xl w-full max-w-lg p-6 space-y-5">
-            <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-4">
-              <h2 className="font-serif-editorial text-2xl font-semibold text-[#151C27]">
+            <div className="flex items-center justify-between border-b border-[#E1E7F0] pb-4">
+              <h2 className="font-serif-editorial text-2xl font-semibold text-[#14213D]">
                 {editingClient ? 'Edit Client Profile' : 'New Client Profile'}
               </h2>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
                 aria-label="Close client modal"
-                className="h-10 w-10 rounded-lg flex items-center justify-center text-[#6B7280] hover:bg-[#F3F4F6]"
+                className="h-10 w-10 rounded-lg flex items-center justify-center text-[#667085] hover:bg-[#F1F4F9]"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -266,7 +269,7 @@ export function ClientsView({
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                   Full Name
                 </label>
                 <input
@@ -274,13 +277,13 @@ export function ClientsView({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="salon-input w-full px-3 text-sm text-[#151C27]"
+                  className="salon-input w-full px-3 text-sm text-[#14213D]"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                  <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                     Phone Number
                   </label>
                   <input
@@ -289,30 +292,30 @@ export function ClientsView({
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+254 7..."
                     required
-                    className="salon-input w-full px-3 text-sm text-[#151C27] tabular-ksh"
+                    className="salon-input w-full px-3 text-sm text-[#14213D] tabular-ksh"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                  <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                     Email
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="salon-input w-full px-3 text-sm text-[#151C27]"
+                    className="salon-input w-full px-3 text-sm text-[#14213D]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                   Preferred Stylist
                 </label>
                 <select
                   value={preferredStylistId}
                   onChange={(e) => setPreferredStylistId(e.target.value)}
-                  className="salon-input w-full px-3 text-sm text-[#151C27]"
+                  className="salon-input w-full px-3 text-sm text-[#14213D]"
                 >
                   <option value="">No Preference</option>
                   {stylists.map((s) => (
@@ -324,7 +327,7 @@ export function ClientsView({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[#4A4455] mb-1.5">
+                <label className="block text-xs font-semibold text-[#344054] mb-1.5">
                   Color Formula & Care Notes
                 </label>
                 <textarea
@@ -332,7 +335,7 @@ export function ClientsView({
                   value={formulaNotes}
                   onChange={(e) => setFormulaNotes(e.target.value)}
                   placeholder="Shade mix, heat limit, scalp sensitivity..."
-                  className="w-full rounded-lg border border-[#E5E7EB] p-3 text-sm text-[#151C27] focus:outline-none focus:border-[#6D28D9]"
+                  className="w-full rounded-lg border border-[#E1E7F0] p-3 text-sm text-[#14213D] focus:outline-none focus:border-[#6D28D9]"
                 />
               </div>
 
@@ -340,7 +343,7 @@ export function ClientsView({
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="h-11 px-4 rounded-lg border border-[#E5E7EB] bg-white text-sm font-semibold text-[#151C27]"
+                  className="h-11 px-4 rounded-lg border border-[#E1E7F0] bg-white text-sm font-semibold text-[#14213D]"
                 >
                   Cancel
                 </button>
