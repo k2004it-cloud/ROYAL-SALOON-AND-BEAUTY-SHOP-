@@ -25,20 +25,116 @@ from urllib.parse import parse_qs, urlparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("SALON_DB_PATH", os.path.join(BASE_DIR, "salon_pro.db"))
+DATABASE_URL = os.environ.get("SALON_DATABASE_URL", "").strip()
+DATABASE_ENGINE = "postgresql" if DATABASE_URL else "sqlite"
 PORT = int(os.environ.get("PYTHON_API_PORT", "8001"))
 SESSION_COOKIE = "royal_salon_session"
 SESSION_TTL_SECONDS = 8 * 60 * 60
 PASSWORD_ITERATIONS = 240_000
 DEMO_MODE = (
-    os.environ.get("SALON_DEMO_MODE", "").lower() == "true"
+    not DATABASE_URL
+    and os.environ.get("SALON_DEMO_MODE", "").lower() == "true"
     and os.environ.get("NODE_ENV", "").lower() != "production"
 )
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,30}$")
 
 DB_LOCK = threading.Lock()
+EVENT_REVISION = 0
+EVENT_REVISION_LOCK = threading.Lock()
 
 
-def get_conn() -> sqlite3.Connection:
+class PostgresRow(dict):
+    """Dict-like row that also supports SQLite-style numeric indexing."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return tuple(self.values())[key]
+        return super().__getitem__(key)
+
+
+class PostgresCursor:
+    def __init__(self, cursor):
+        self.cursor = cursor
+
+    def execute(self, statement: str, params=None):
+        prepared = _prepare_postgres_sql(statement)
+        if params is not None:
+            params = tuple(int(value) if isinstance(value, bool) else value for value in params)
+        self.cursor.execute(prepared, params or None)
+        return self
+
+    def fetchone(self):
+        row = self.cursor.fetchone()
+        return PostgresRow(row) if row is not None else None
+
+    def fetchall(self):
+        return [PostgresRow(row) for row in self.cursor.fetchall()]
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+
+class PostgresConnection:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, statement: str, params=None) -> PostgresCursor:
+        return PostgresCursor(self.connection.cursor()).execute(statement, params)
+
+    def cursor(self) -> PostgresCursor:
+        return PostgresCursor(self.connection.cursor())
+
+    def commit(self) -> None:
+        global EVENT_REVISION
+        self.connection.commit()
+        with EVENT_REVISION_LOCK:
+            EVENT_REVISION += 1
+
+    def rollback(self) -> None:
+        self.connection.rollback()
+
+    def close(self) -> None:
+        self.connection.close()
+
+
+def _prepare_postgres_sql(statement: str) -> str:
+    sql = statement
+    if re.match(r"^\s*INSERT\s+OR\s+IGNORE\s+INTO\b", sql, re.IGNORECASE):
+        sql = re.sub(r"INSERT\s+OR\s+IGNORE\s+INTO\b", "INSERT INTO", sql, count=1, flags=re.IGNORECASE)
+        trimmed = sql.rstrip()
+        if trimmed.endswith(";"):
+            sql = f"{trimmed[:-1].rstrip()} ON CONFLICT DO NOTHING;"
+        else:
+            sql = f"{trimmed} ON CONFLICT DO NOTHING"
+
+    sql = sql.replace("?", "%s")
+    sql = re.sub(
+        r"\b([a-z_][a-z0-9_.]*)\s*=\s*(%s)\s+COLLATE\s+NOCASE\b",
+        r"LOWER(\1) = LOWER(\2)",
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(r"\bMAX\(\s*0\s*,", "GREATEST(0,", sql, flags=re.IGNORECASE)
+    return sql
+
+
+def get_conn() -> sqlite3.Connection | PostgresConnection:
+    if DATABASE_URL:
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+        except ImportError as exc:
+            raise RuntimeError(
+                "PostgreSQL mode requires Psycopg. Install backend/requirements.txt before setting SALON_DATABASE_URL."
+            ) from exc
+
+        connection = psycopg.connect(
+            DATABASE_URL,
+            row_factory=dict_row,
+            sslmode=os.environ.get("SALON_DATABASE_SSLMODE", "require"),
+        )
+        return PostgresConnection(connection)
+
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -73,6 +169,43 @@ def _suggest_username(email: str, used_usernames: set[str]) -> str:
 def init_db() -> None:
     with DB_LOCK:
         conn = get_conn()
+        if DATABASE_URL:
+            try:
+                required_tables = {
+                    "users", "sessions", "auth_attempts", "business_settings", "audit_logs",
+                    "support_requests", "announcements", "announcement_reads", "stylists",
+                    "catalog_items", "clients", "appointments", "tickets", "ticket_items",
+                    "commission_payouts", "commission_payout_items", "attendance_records",
+                    "staff_tasks", "inventory_reports",
+                }
+                existing_tables = {
+                    row["table_name"]
+                    for row in conn.execute(
+                        "SELECT tablename AS table_name FROM pg_tables WHERE schemaname = 'public'"
+                    ).fetchall()
+                }
+                missing_tables = sorted(required_tables - existing_tables)
+                if missing_tables:
+                    raise RuntimeError(
+                        "Supabase is missing application tables: "
+                        + ", ".join(missing_tables)
+                        + ". Apply the repository migrations with `npx supabase db push --remote`."
+                    )
+
+                conn.execute(
+                    """
+                    INSERT INTO business_settings
+                        (id, business_name, phone, email, address, opening_time, closing_time, updated_at, updated_by)
+                    VALUES (1, 'Royal Saloon & Beauty Hub', '', '', '', '09:00', '19:30', ?, '')
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    (datetime.datetime.now().isoformat(timespec="seconds"),),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+            return
+
         cur = conn.cursor()
 
         cur.executescript(
@@ -1144,6 +1277,13 @@ def fetch_tickets(conn: sqlite3.Connection, date_str: str | None = None) -> list
     return result
 
 
+def workspace_revision(conn) -> int:
+    if DATABASE_URL:
+        with EVENT_REVISION_LOCK:
+            return EVENT_REVISION
+    return conn.execute("PRAGMA data_version").fetchone()[0]
+
+
 class SalonHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -1183,7 +1323,7 @@ class SalonHandler(BaseHTTPRequestHandler):
     def _stream_workspace_events(self) -> None:
         observer = get_conn()
         try:
-            last_version = observer.execute("PRAGMA data_version").fetchone()[0]
+            last_version = workspace_revision(observer)
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache, no-transform")
@@ -1196,7 +1336,7 @@ class SalonHandler(BaseHTTPRequestHandler):
 
             while True:
                 time.sleep(0.4)
-                current_version = observer.execute("PRAGMA data_version").fetchone()[0]
+                current_version = workspace_revision(observer)
                 if current_version != last_version:
                     last_version = current_version
                     self.wfile.write(b"event: workspace-updated\ndata: {}\n\n")
@@ -1219,7 +1359,7 @@ class SalonHandler(BaseHTTPRequestHandler):
         date_str = qs.get("date", [today])[0]
 
         if path == "/api/health":
-            self._send_json(200, {"status": "ok", "engine": "python-sqlite"})
+            self._send_json(200, {"status": "ok", "engine": f"python-{DATABASE_ENGINE}"})
             return
 
         if path == "/api/events":

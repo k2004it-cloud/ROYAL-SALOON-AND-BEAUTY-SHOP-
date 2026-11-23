@@ -4,7 +4,7 @@
 
 The migrations preserve the original schema history, then add the tables used by the current salon admin and employee features. The forward migration renames the three incompatible legacy tables with a `legacy_v1_` prefix, preserving their data, and enables row-level security on the app tables while removing browser-role access.
 
-The running Python API still uses the local SQLite database. This migration prepares the Supabase schema, but applying it does not switch the app's storage to Supabase. The Python API must be changed to use PostgreSQL before the hosted app can read or write these tables.
+The Python API now supports both PostgreSQL and SQLite. It uses SQLite by default; setting the server-only `SALON_DATABASE_URL` switches it to Supabase PostgreSQL. The local SQLite file is left untouched.
 
 The app also currently manages its own employee and admin login sessions. Supabase Auth is not connected to that login flow.
 
@@ -32,8 +32,8 @@ The forward migration preserves the prior schema's overlapping tables by renamin
 
 ## Connect the app after the project is ready
 
-The next code change is to replace the Python API's SQLite connection with a PostgreSQL connection and map its existing queries to PostgreSQL. Then configure the backend with the database connection string from **Connect** in the Supabase dashboard. The Python process is a persistent backend; use the direct connection when the host supports it, or the session pooler when it needs IPv4 compatibility.
+Install the PostgreSQL driver with `pip install -r backend/requirements.txt`, then set `SALON_DATABASE_URL` in the backend's private environment using the connection string from **Connect** in the Supabase dashboard. Copy the connection string there; do not send it in chat. The Python process is a persistent backend; use the direct connection when the host supports it, or the session pooler when it needs IPv4 compatibility.
 
-Keep the database connection string in a server-side secret such as `DATABASE_URL`. Do not add it to a `VITE_*` variable, frontend code, or source control. The browser should continue to call the app API, which enforces the existing admin and employee permissions.
+For local development, copy `.env.example` to `.env` and set `SALON_DATABASE_URL` there. `server.ts` loads `.env` and passes the value to the Python API. Keep the database connection string server-side. Do not add it to a `VITE_*` variable, frontend code, or source control. The browser continues to call the app API, which enforces the existing admin and employee permissions.
 
-When the backend connection is implemented, SQLite can remain the local-development default until the team chooses to make Supabase the default for all environments.
+When PostgreSQL is first enabled, it will use the Supabase tables and will not copy records from `backend/salon_pro.db`. The admin setup screen will be available if no administrator exists in Supabase. Any data transfer from the local SQLite file should be handled as a separate, reviewed import.
