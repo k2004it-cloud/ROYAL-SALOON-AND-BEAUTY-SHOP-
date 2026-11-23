@@ -27,6 +27,7 @@ export interface StaffUser {
   name: string;
   username: string;
   email: string;
+  phone?: string;
   stylist_id?: string;
   role: StaffRole;
   active: boolean;
@@ -70,6 +71,44 @@ export interface SupportRequest {
   created_at: string;
   updated_at: string;
   updated_by: string;
+}
+
+export interface Announcement {
+  id: string;
+  sender_user_id: string;
+  sender_name: string;
+  sender_role: StaffRole;
+  title: string;
+  message: string;
+  created_at: string;
+  is_read: boolean;
+}
+
+export interface EmployeeEarningsReport {
+  start_date: string;
+  end_date: string;
+  total_sales_ksh: number;
+  total_commission_ksh: number;
+  ticket_count: number;
+  daily: Array<DailyRevenuePoint & { commission_ksh: number }>;
+  tickets: Array<{
+    id: string;
+    ticket_number: string;
+    business_date: string;
+    created_at: string;
+    client_name: string;
+    payment_method: PaymentMethod;
+    attributed_sales_ksh: number;
+    commission_ksh: number;
+    quantity: number;
+  }>;
+  items: Array<{
+    item_name: string;
+    kind: 'service' | 'product' | 'tip';
+    quantity: number;
+    sales_ksh: number;
+    commission_ksh: number;
+  }>;
 }
 
 export interface AuthStatus {

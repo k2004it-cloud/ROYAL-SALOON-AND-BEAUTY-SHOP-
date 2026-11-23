@@ -2,11 +2,13 @@ import type {
   Appointment,
   AppointmentStatus,
   AuditLogEntry,
+  Announcement,
   BootstrapPayload,
   BusinessSettings,
   CatalogItem,
   Client,
   DailyRevenuePoint,
+  EmployeeEarningsReport,
   PaymentMethod,
   AuthStatus,
   StaffUser,
@@ -97,6 +99,30 @@ export const salonApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+
+  updateProfile(payload: { name: string; email: string; phone: string }): Promise<{ user: StaffUser }> {
+    return apiRequest('/api/auth/profile', { method: 'PATCH', body: JSON.stringify(payload) });
+  },
+
+  employeeEarnings(start: string, end: string): Promise<EmployeeEarningsReport> {
+    return apiRequest('/api/employee/earnings?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end));
+  },
+
+  employeeEarningsExportUrl(start: string, end: string): string {
+    return '/api/employee/earnings/export?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end);
+  },
+
+  listAnnouncements(): Promise<{ announcements: Announcement[]; unread_count: number }> {
+    return apiRequest('/api/announcements');
+  },
+
+  createAnnouncement(payload: { title: string; message: string }): Promise<{ announcement: Announcement }> {
+    return apiRequest('/api/announcements', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  markAnnouncementRead(id: string): Promise<{ read: boolean; id: string }> {
+    return apiRequest('/api/announcements/' + encodeURIComponent(id) + '/read', { method: 'POST', body: JSON.stringify({}) });
   },
 
   listAuditLogs(date: string): Promise<{ entries: AuditLogEntry[] }> {

@@ -42,7 +42,7 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
     { label: 'Check Stock', tab: 'inventory', Icon: PackageSearch },
     { label: 'View Clients', tab: 'clients', Icon: UsersRound },
     { label: 'Generate Report', tab: 'reports', Icon: ChartNoAxesColumnIncreasing },
-    { label: 'Send Notification', tab: 'support', Icon: Send },
+    { label: 'Send Notification', tab: 'notifications', Icon: Send },
     { label: 'View Schedule', tab: 'schedule', Icon: Clock3 },
   ];
   const notifications = [

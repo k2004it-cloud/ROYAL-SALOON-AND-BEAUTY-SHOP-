@@ -87,6 +87,7 @@ def init_db() -> None:
                 pin_salt TEXT NOT NULL,
                 pin_hash TEXT NOT NULL,
                 stylist_id TEXT NOT NULL DEFAULT '',
+                phone TEXT NOT NULL DEFAULT '',
                 role TEXT NOT NULL CHECK(role IN ('admin', 'employee')),
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
@@ -144,6 +145,25 @@ def init_db() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 updated_by TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS announcements (
+                id TEXT PRIMARY KEY,
+                sender_user_id TEXT NOT NULL,
+                sender_name TEXT NOT NULL,
+                sender_role TEXT NOT NULL CHECK(sender_role IN ('admin', 'employee')),
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS announcement_reads (
+                announcement_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                read_at TEXT NOT NULL,
+                PRIMARY KEY (announcement_id, user_id),
+                FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS stylists (
@@ -253,6 +273,8 @@ def init_db() -> None:
             cur.execute("ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT ''")
         if "stylist_id" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN stylist_id TEXT NOT NULL DEFAULT ''")
+        if "phone" not in user_columns:
+            cur.execute("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
 
         used_usernames: set[str] = set()
         for user in cur.execute(
@@ -341,6 +363,7 @@ def _public_user(row: sqlite3.Row | dict) -> dict:
         "name": row["name"],
         "username": row["username"],
         "email": row["email"],
+        "phone": row["phone"] if "phone" in row.keys() else "",
         "stylist_id": row["stylist_id"] if "stylist_id" in row.keys() else "",
         "role": row["role"],
         "active": bool(row["active"]),
@@ -810,6 +833,81 @@ def compute_employee_dashboard(conn: sqlite3.Connection, business_date: str, sty
     }
 
 
+def compute_employee_earnings(conn: sqlite3.Connection, stylist_id: str, start_date: str, end_date: str) -> dict:
+    daily_rows = conn.execute(
+        """
+        SELECT t.business_date AS date,
+               COALESCE(SUM(ti.line_total_ksh), 0) AS revenue_ksh,
+               COALESCE(SUM(ti.commission_ksh), 0) AS commission_ksh,
+               COUNT(DISTINCT t.id) AS ticket_count
+        FROM ticket_items ti
+        JOIN tickets t ON t.id = ti.ticket_id
+        WHERE ti.stylist_id = ? AND t.status = 'Paid'
+          AND t.business_date BETWEEN ? AND ?
+        GROUP BY t.business_date
+        ORDER BY t.business_date
+        """,
+        (stylist_id, start_date, end_date),
+    ).fetchall()
+    daily_by_date = {row["date"]: dict(row) for row in daily_rows}
+    start = datetime.date.fromisoformat(start_date)
+    end = datetime.date.fromisoformat(end_date)
+    daily = []
+    current = start
+    while current <= end:
+        key = current.isoformat()
+        row = daily_by_date.get(key, {})
+        daily.append({
+            "date": key,
+            "revenue_ksh": int(row.get("revenue_ksh", 0)),
+            "commission_ksh": int(row.get("commission_ksh", 0)),
+            "ticket_count": int(row.get("ticket_count", 0)),
+        })
+        current += datetime.timedelta(days=1)
+
+    tickets = conn.execute(
+        """
+        SELECT t.id, t.ticket_number, t.business_date, t.created_at,
+               t.client_name, t.payment_method,
+               COALESCE(SUM(ti.line_total_ksh), 0) AS attributed_sales_ksh,
+               COALESCE(SUM(ti.commission_ksh), 0) AS commission_ksh,
+               COALESCE(SUM(ti.quantity), 0) AS quantity
+        FROM tickets t
+        JOIN ticket_items ti ON ti.ticket_id = t.id
+        WHERE ti.stylist_id = ? AND t.status = 'Paid'
+          AND t.business_date BETWEEN ? AND ?
+        GROUP BY t.id
+        ORDER BY t.business_date DESC, t.created_at DESC
+        """,
+        (stylist_id, start_date, end_date),
+    ).fetchall()
+    items = conn.execute(
+        """
+        SELECT ti.item_name, ti.kind,
+               SUM(ti.quantity) AS quantity,
+               SUM(ti.line_total_ksh) AS sales_ksh,
+               SUM(ti.commission_ksh) AS commission_ksh
+        FROM ticket_items ti
+        JOIN tickets t ON t.id = ti.ticket_id
+        WHERE ti.stylist_id = ? AND t.status = 'Paid'
+          AND t.business_date BETWEEN ? AND ?
+        GROUP BY ti.item_name, ti.kind
+        ORDER BY sales_ksh DESC, ti.item_name
+        """,
+        (stylist_id, start_date, end_date),
+    ).fetchall()
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "total_sales_ksh": sum(row["revenue_ksh"] for row in daily),
+        "total_commission_ksh": sum(row["commission_ksh"] for row in daily),
+        "ticket_count": sum(row["ticket_count"] for row in daily),
+        "daily": daily,
+        "tickets": [dict(row) for row in tickets],
+        "items": [dict(row) for row in items],
+    }
+
+
 def fetch_tickets(conn: sqlite3.Connection, date_str: str | None = None) -> list[dict]:
     if date_str:
         t_rows = conn.execute(
@@ -948,6 +1046,73 @@ class SalonHandler(BaseHTTPRequestHandler):
                             (user["id"],),
                         ).fetchall()
                     self._send_json(200, {"requests": [dict(row) for row in rows]})
+                    return
+
+                if path == "/api/announcements":
+                    rows = conn.execute(
+                        """
+                        SELECT a.*, CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS is_read
+                        FROM announcements a
+                        LEFT JOIN announcement_reads r
+                          ON r.announcement_id = a.id AND r.user_id = ?
+                        ORDER BY a.created_at DESC
+                        LIMIT 200
+                        """,
+                        (user["id"],),
+                    ).fetchall()
+                    announcements = [dict(row) | {"is_read": bool(row["is_read"])} for row in rows]
+                    unread_count = sum(
+                        1 for item in announcements
+                        if item["sender_user_id"] != user["id"] and not item["is_read"]
+                    )
+                    self._send_json(200, {"announcements": announcements, "unread_count": unread_count})
+                    return
+
+                if path in {"/api/employee/earnings", "/api/employee/earnings/export"}:
+                    if user["role"] != "employee":
+                        self._send_json(403, {"error": "Employee earnings are available only to the signed-in employee."})
+                        return
+                    try:
+                        end_date = qs.get("end", [datetime.date.today().isoformat()])[0]
+                        start_date = qs.get("start", [(datetime.date.fromisoformat(end_date) - datetime.timedelta(days=6)).isoformat()])[0]
+                        start_value = datetime.date.fromisoformat(start_date)
+                        end_value = datetime.date.fromisoformat(end_date)
+                        days = (end_value - start_value).days
+                        if days < 0 or days > 365:
+                            raise ValueError("date range is invalid")
+                    except ValueError:
+                        self._send_json(400, {"error": "Choose a valid date range of up to 366 days."})
+                        return
+                    report = compute_employee_earnings(
+                        conn,
+                        user["stylist_id"] or "",
+                        start_date,
+                        end_date,
+                    )
+                    if path.endswith("/export"):
+                        output = io.StringIO(newline="")
+                        writer = csv.writer(output)
+                        writer.writerow(["Date", "Ticket", "Client", "Payment method", "Attributed sales (KSh)", "Commission (KSh)", "Items"])
+                        for ticket in report["tickets"]:
+                            writer.writerow([
+                                ticket["business_date"],
+                                ticket["ticket_number"],
+                                ticket["client_name"],
+                                ticket["payment_method"],
+                                ticket["attributed_sales_ksh"],
+                                ticket["commission_ksh"],
+                                ticket["quantity"],
+                            ])
+                        payload = output.getvalue().encode("utf-8-sig")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/csv; charset=utf-8")
+                        self.send_header("Content-Disposition", f'attachment; filename="employee-earnings-{start_date}-to-{end_date}.csv"')
+                        self.send_header("Content-Length", str(len(payload)))
+                        self.send_header("Cache-Control", "no-store")
+                        self.end_headers()
+                        self.wfile.write(payload)
+                    else:
+                        self._send_json(200, report)
                     return
 
                 if path in ("/api/tickets", "/api/analytics", "/api/analytics/trend", "/api/ledger/export") and user["role"] != "admin":
@@ -1280,6 +1445,61 @@ class SalonHandler(BaseHTTPRequestHandler):
                     _record_audit_event(conn, user, "change_password", "account", "Account password changed.")
                     conn.commit()
                     self._send_json(200, {"changed": True})
+                    return
+
+                if path.startswith("/api/announcements/") and path.endswith("/read"):
+                    announcement_id = path.split("/")[-2]
+                    exists = conn.execute("SELECT 1 FROM announcements WHERE id = ?", (announcement_id,)).fetchone()
+                    if not exists:
+                        self._send_json(404, {"error": "Announcement not found."})
+                        return
+                    conn.execute(
+                        "INSERT OR IGNORE INTO announcement_reads (announcement_id, user_id, read_at) VALUES (?, ?, ?)",
+                        (announcement_id, user["id"], datetime.datetime.now().isoformat(timespec="seconds")),
+                    )
+                    conn.commit()
+                    self._send_json(200, {"read": True, "id": announcement_id})
+                    return
+
+                if path == "/api/announcements":
+                    title = body.get("title")
+                    message = body.get("message")
+                    if not isinstance(title, str) or not isinstance(message, str):
+                        self._send_json(400, {"error": "Enter an announcement title and message."})
+                        return
+                    title = title.strip()
+                    message = message.strip()
+                    if len(title) < 4 or len(title) > 120 or len(message) < 5 or len(message) > 2000:
+                        self._send_json(400, {"error": "Title must be 4-120 characters and message must be 5-2000 characters."})
+                        return
+                    announcement_id = f"ann-{uuid.uuid4().hex[:12]}"
+                    now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute(
+                        """
+                        INSERT INTO announcements
+                            (id, sender_user_id, sender_name, sender_role, title, message, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (announcement_id, user["id"], user["name"], user["role"], title, message, now_iso),
+                    )
+                    conn.execute(
+                        "INSERT INTO announcement_reads (announcement_id, user_id, read_at) VALUES (?, ?, ?)",
+                        (announcement_id, user["id"], now_iso),
+                    )
+                    _record_audit_event(conn, user, "publish", "announcement", f"Published announcement: {title}.", announcement_id)
+                    conn.commit()
+                    self._send_json(201, {
+                        "announcement": {
+                            "id": announcement_id,
+                            "sender_user_id": user["id"],
+                            "sender_name": user["name"],
+                            "sender_role": user["role"],
+                            "title": title,
+                            "message": message,
+                            "created_at": now_iso,
+                            "is_read": True,
+                        }
+                    })
                     return
 
                 if path == "/api/support/requests":
@@ -1772,6 +1992,37 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(401, {"error": "Sign in to continue."})
                     return
 
+                if path == "/api/auth/profile":
+                    name = body.get("name", user["name"])
+                    email = body.get("email", user["email"])
+                    phone = body.get("phone", user["phone"] or "")
+                    if not all(isinstance(value, str) for value in (name, email, phone)):
+                        self._send_json(400, {"error": "Profile fields must be text values."})
+                        return
+                    name, email, phone = name.strip(), email.strip().lower(), phone.strip()
+                    if not name or len(name) > 120:
+                        self._send_json(400, {"error": "Name is required and must be 120 characters or fewer."})
+                        return
+                    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
+                        self._send_json(400, {"error": "Enter a valid work email address."})
+                        return
+                    if len(phone) > 40:
+                        self._send_json(400, {"error": "Phone number must be 40 characters or fewer."})
+                        return
+                    conflict = conn.execute(
+                        "SELECT 1 FROM users WHERE email = ? COLLATE NOCASE AND id != ?",
+                        (email, user["id"]),
+                    ).fetchone()
+                    if conflict:
+                        self._send_json(409, {"error": "Another staff account already uses that email."})
+                        return
+                    conn.execute("UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ?", (name, email, phone, user["id"]))
+                    _record_audit_event(conn, user, "update", "staff_profile", "Staff profile contact details updated.", user["id"])
+                    conn.commit()
+                    updated = conn.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+                    self._send_json(200, {"user": _public_user(updated)})
+                    return
+
                 if path == "/api/settings/business":
                     if user["role"] != "admin":
                         self._send_json(403, {"error": "Administrator access is required."})
@@ -1876,8 +2127,8 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"employee": _public_user(updated) | {"created_at": updated["created_at"]}})
                     return
 
-                if path.startswith("/api/catalog/") and user["role"] != "admin":
-                    self._send_json(403, {"error": "Administrator access is required to manage the catalog."})
+                if path.startswith("/api/catalog/") and user["role"] == "employee" and set(body) != {"stock_delta"}:
+                    self._send_json(403, {"error": "Employees can only adjust product stock."})
                     return
 
                 if path.startswith("/api/appointments/"):
@@ -1976,9 +2227,20 @@ class SalonHandler(BaseHTTPRequestHandler):
                         return
 
                     stock_delta = body.get("stock_delta")
+                    if user["role"] == "employee" and existing["kind"] != "product":
+                        self._send_json(403, {"error": "Employees can only adjust product stock."})
+                        return
                     new_stock = int(existing["stock_qty"])
                     if stock_delta is not None:
-                        new_stock = max(0, new_stock + int(stock_delta))
+                        try:
+                            stock_delta = int(stock_delta)
+                        except (TypeError, ValueError):
+                            self._send_json(400, {"error": "Stock adjustment must be a whole number."})
+                            return
+                        if stock_delta == 0 or abs(stock_delta) > 10000:
+                            self._send_json(400, {"error": "Stock adjustment must be between -10000 and 10000 and cannot be zero."})
+                            return
+                        new_stock = max(0, new_stock + stock_delta)
                     elif "stock_qty" in body:
                         new_stock = max(0, int(body["stock_qty"]))
 

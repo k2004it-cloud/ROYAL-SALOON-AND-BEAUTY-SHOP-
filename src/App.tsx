@@ -26,6 +26,7 @@ import { WorkspaceHomeView } from './components/WorkspaceHomeView';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { SystemPages } from './components/SystemPages';
 import { EmployeePages } from './components/EmployeePages';
+import { NotificationsView } from './components/NotificationsView';
 import { Bell, CalendarDays, ChevronDown, Crown, LogOut, Menu, Search } from 'lucide-react';
 
 const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
@@ -38,6 +39,7 @@ const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
     'pos',
     'inventory',
     'reports',
+    'notifications',
     'settings',
     'system-logs',
     'backups',
@@ -113,6 +115,7 @@ export default function App() {
   const [workspaceSearch, setWorkspaceSearch] = useState('');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [openSupportCount, setOpenSupportCount] = useState(0);
+  const [unreadAnnouncementCount, setUnreadAnnouncementCount] = useState(0);
 
   const navigatePath = useCallback((targetPath: string, replace = false) => {
     if (window.location.pathname !== targetPath) {
@@ -158,6 +161,10 @@ export default function App() {
 
   const handleBusinessSettingsSaved = (settings: BusinessSettings) => {
     setData((current) => current ? { ...current, business_settings: settings } : current);
+  };
+
+  const handleProfileUpdated = (user: StaffUser) => {
+    setAuthUser(user);
   };
 
   const checkAuthStatus = useCallback(async () => {
@@ -220,11 +227,13 @@ export default function App() {
       if (document.visibilityState !== 'visible') return;
       void refreshData(businessDate);
       try {
-        const [status, supportResult] = await Promise.all([
+        const [status, supportResult, announcementResult] = await Promise.all([
           salonApi.authStatus(),
           salonApi.listSupportRequests(),
+          salonApi.listAnnouncements(),
         ]);
         if (!active) return;
+        setUnreadAnnouncementCount(announcementResult.unread_count);
         if (status.user?.role === 'admin') {
           setOpenSupportCount(supportResult.requests.filter((request) => request.status !== 'resolved').length);
         } else if (status.user?.role === 'employee') {
@@ -488,6 +497,7 @@ export default function App() {
   const searchItems: Array<{ label: string; tab: WorkspaceTab }> = authUser?.role === 'employee'
     ? [
         { label: 'Staff Dashboard', tab: 'my-day' },
+        { label: 'My Earnings', tab: 'earnings' },
         { label: 'My Appointments', tab: 'my-appointments' },
         { label: 'Services & Clients', tab: 'clients' },
         { label: 'Sales & Payments', tab: 'pos' },
@@ -500,6 +510,7 @@ export default function App() {
       ]
     : [
         { label: 'Dashboard', tab: 'dashboard' },
+        { label: 'Notifications', tab: 'notifications' },
         { label: 'Clients', tab: 'clients' },
         { label: 'Employees', tab: 'employees' },
         { label: 'Services & Products', tab: 'catalog' },
@@ -515,7 +526,8 @@ export default function App() {
     : [];
   const employeeNotificationCount = (data?.employee_dashboard?.low_stock_items.length ?? 0)
     + (data?.appointments.filter((item) => ['Pending', 'Confirmed'].includes(item.status)).length ?? 0);
-  const headerNotificationCount = employeeNotificationCount + openSupportCount;
+  const headerNotificationCount = (authUser?.role === 'employee' ? employeeNotificationCount : 0)
+    + openSupportCount + unreadAnnouncementCount;
   const profileStylist = authUser?.stylist_id
     ? data?.stylists.find((stylist) => stylist.id === authUser.stylist_id)
     : undefined;
@@ -611,6 +623,7 @@ export default function App() {
           ? (data.employee_dashboard?.low_stock_items.length ?? 0)
           : data.analytics.low_stock_count}
         supportRequestCount={openSupportCount}
+        notificationCount={unreadAnnouncementCount}
         user={authUser}
         onLogout={() => void handleLogout()}
       />
@@ -652,7 +665,7 @@ export default function App() {
                 </div>
               )}
             </div>
-            <button type="button" aria-label="Open notifications" onClick={() => navigateToTab(authUser.role === 'employee' && openSupportCount === 0 ? 'notifications' : 'support')} className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#071B53] hover:bg-[#EFF4FF]">
+            <button type="button" aria-label="Open notifications" onClick={() => navigateToTab('notifications')} className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#071B53] hover:bg-[#EFF4FF]">
               <Bell className="h-6 w-6" />
               {headerNotificationCount > 0 && <span className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F42F43] px-1 text-[10px] font-bold text-white">{headerNotificationCount > 9 ? '9+' : headerNotificationCount}</span>}
             </button>
@@ -697,7 +710,6 @@ export default function App() {
             'my-clients',
             'timesheet',
             'tasks',
-            'notifications',
             'profile',
             'inventory',
             'reports',
@@ -715,8 +727,11 @@ export default function App() {
               onNavigate={navigateToTab}
               onUpdateAppointment={handleUpdateAppointment}
               onOpenPosForClient={handleOpenPosForClient}
+              onProfileUpdated={handleProfileUpdated}
+              onAdjustStock={handleAdjustStock}
             />
           )}
+          {activeTab === 'notifications' && <NotificationsView user={authUser} />}
           {activeTab === 'schedule' && (
             <ScheduleView
               date={businessDate}

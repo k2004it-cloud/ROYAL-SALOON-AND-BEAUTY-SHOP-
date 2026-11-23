@@ -31,6 +31,7 @@ interface SidebarRailProps {
   cartCount: number;
   lowStockCount: number;
   supportRequestCount: number;
+  notificationCount: number;
   user: StaffUser;
   onLogout: () => void;
 }
@@ -49,6 +50,7 @@ const ADMIN_NAV_ITEMS: Array<{
   { id: 'pos', label: 'Sales & Payments', shortLabel: 'Sales', Icon: CreditCard },
   { id: 'inventory', label: 'Inventory', shortLabel: 'Inventory', Icon: PackageSearch },
   { id: 'reports', label: 'Reports', shortLabel: 'Reports', Icon: BarChart3 },
+  { id: 'notifications', label: 'Notifications', shortLabel: 'Alerts', Icon: Bell },
   { id: 'settings', label: 'Settings', shortLabel: 'Settings', Icon: Settings },
   { id: 'system-logs', label: 'System Logs', shortLabel: 'Logs', Icon: ClipboardList },
   { id: 'backups', label: 'Backups', shortLabel: 'Backups', Icon: Database },
@@ -62,6 +64,7 @@ const EMPLOYEE_NAV_ITEMS: Array<{
   Icon: typeof CalendarDays;
 }> = [
   { id: 'my-day', label: 'Staff Dashboard', shortLabel: 'Dashboard', Icon: LayoutDashboard },
+  { id: 'earnings', label: 'My Earnings', shortLabel: 'Earnings', Icon: WalletCards },
   { id: 'my-appointments', label: 'My Appointments', shortLabel: 'Bookings', Icon: CalendarDays },
   { id: 'clients', label: 'Services & Clients', shortLabel: 'Clients', Icon: Users },
   { id: 'pos', label: 'Sales & Payments', shortLabel: 'Sales', Icon: CreditCard },
@@ -81,6 +84,7 @@ export function SidebarRail({
   cartCount,
   lowStockCount,
   supportRequestCount,
+  notificationCount,
   user,
   onLogout,
 }: SidebarRailProps) {
@@ -150,7 +154,8 @@ export function SidebarRail({
                   ? cartCount
                   : id === 'inventory' && lowStockCount > 0
                     ? lowStockCount
-                    : id === 'support' ? supportRequestCount : 0;
+                    : id === 'support' ? supportRequestCount
+                      : id === 'notifications' ? notificationCount : 0;
 
               return (
                 <button
@@ -213,6 +218,7 @@ export function SidebarRail({
       >
         {visibleNavItems.map(({ id, shortLabel, Icon }) => {
           const isActive = activeTab === id;
+          const badgeCount = id === 'notifications' ? notificationCount : 0;
           return (
             <button
               key={id}
@@ -222,7 +228,7 @@ export function SidebarRail({
                 isActive ? 'text-white bg-[#0D6EFD]/90' : 'text-[#DCEBFF]/75'
               }`}
             >
-              <Icon className="h-4 w-4 shrink-0" />
+              <span className="relative"><Icon className="h-4 w-4 shrink-0" />{badgeCount > 0 && <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F42F43] px-1 text-[9px] font-bold text-white">{badgeCount > 9 ? '9+' : badgeCount}</span>}</span>
               <span className="truncate max-w-full px-1">{shortLabel}</span>
             </button>
           );
