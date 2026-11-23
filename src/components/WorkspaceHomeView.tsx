@@ -61,13 +61,13 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
   ].slice(0, 3);
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <section className="relative isolate overflow-hidden rounded-2xl border border-[#0B3B7A] bg-gradient-to-r from-[#071B53] via-[#0757D8] to-[#1479FF] px-5 py-6 text-white shadow-xl sm:px-7">
+    <div className="employee-dashboard-content space-y-4 sm:space-y-5 xl:space-y-3">
+      <section className="relative isolate overflow-hidden rounded-2xl border border-[#0B3B7A] bg-gradient-to-r from-[#071B53] via-[#0757D8] to-[#1479FF] px-5 py-6 text-white shadow-xl sm:px-7 xl:px-5 xl:py-3">
         <div aria-hidden="true" className="pointer-events-none absolute -right-4 -top-12 text-white/10"><Sparkles className="h-56 w-56" strokeWidth={0.8} /></div>
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-5">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#DCEBFF]">Employee workspace</p>
-            <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">Welcome back, {user.name}!</h1>
+            <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl xl:mt-1 xl:text-2xl">Welcome back, {user.name}!</h1>
             <p className="mt-2 text-sm text-[#E6F0FF]">Here’s what’s happening at the salon today.</p>
           </div>
           <div className="space-y-2 text-sm font-semibold text-white/95">
@@ -77,10 +77,10 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
         </div>
       </section>
 
-      <section aria-label="My work summary" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section aria-label="My work summary" className="grid grid-cols-2 gap-3 xl:grid-cols-4 xl:gap-2">
         {metrics.map(({ label, value, detail, Icon, color }) => (
-          <article key={label} className={'relative min-h-28 overflow-hidden rounded-xl bg-gradient-to-br ' + color + ' p-4 text-white shadow-lg'}>
-            <div className="flex h-full items-center gap-3"><Icon className="h-9 w-9 shrink-0 text-white/95" /><div className="min-w-0">
+          <article key={label} className={'relative min-h-28 overflow-hidden rounded-xl bg-gradient-to-br ' + color + ' p-4 text-white shadow-lg xl:min-h-[82px] xl:p-3'}>
+            <div className="flex h-full items-center gap-3"><Icon className="h-9 w-9 shrink-0 text-white/95 xl:h-8 xl:w-8" /><div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-wide text-white/85">{label}</p><p className="mt-1 truncate text-lg font-extrabold sm:text-xl">{value}</p>
               <p className="mt-1 truncate text-[10px] font-semibold text-white/85">{detail}</p>
             </div></div>
@@ -88,15 +88,15 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
         ))}
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,1fr)]">
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,1fr)] xl:gap-2">
         <article className="salon-card overflow-hidden rounded-2xl">
-          <div className="flex items-center justify-between gap-3 border-b border-[#DDE6F1] px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-[#DDE6F1] px-4 py-3 xl:py-2">
             <h2 className="flex items-center gap-2 text-lg font-extrabold text-[#14213D]"><CalendarDays className="h-5 w-5 text-[#0D6EFD]" />Today’s Appointments</h2>
             <button type="button" onClick={() => onNavigate('my-appointments')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0B5ED7]">View All <ArrowRight className="h-4 w-4" /></button>
           </div>
-          <div className="hidden grid-cols-[0.8fr_1.2fr_1.2fr_0.9fr_auto] gap-2 bg-[#F1F4FF] px-4 py-2 text-[10px] font-bold uppercase text-[#475467] sm:grid"><span>Time</span><span>Client</span><span>Service</span><span>Status</span><span>Action</span></div>
+          <div className="hidden grid-cols-[0.8fr_1.2fr_1.2fr_0.9fr_auto] gap-2 bg-[#F1F4FF] px-4 py-2 text-[10px] font-bold uppercase text-[#475467] sm:grid xl:py-1.5"><span>Time</span><span>Client</span><span>Service</span><span>Status</span><span>Action</span></div>
           {appointmentRows.length ? appointmentRows.map((appointment) => (
-            <div key={appointment.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-[#E7ECF5] px-4 py-3 last:border-b-0 sm:grid-cols-[0.8fr_1.2fr_1.2fr_0.9fr_auto]">
+            <div key={appointment.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-[#E7ECF5] px-4 py-3 last:border-b-0 sm:grid-cols-[0.8fr_1.2fr_1.2fr_0.9fr_auto] xl:py-2">
               <span className="text-xs font-bold text-[#14213D]">{appointment.start_time}</span><span className="min-w-0 truncate text-xs font-semibold text-[#14213D]">{appointment.client_name}</span>
               <span className="hidden min-w-0 truncate text-xs text-[#344054] sm:block">{appointment.service_name}</span><span className="hidden sm:block"><StatusBadge status={appointment.status} /></span>
               <button type="button" onClick={() => onNavigate('my-appointments')} className="rounded-md bg-[#0D6EFD] px-3 py-1.5 text-[10px] font-bold text-white">View</button>
@@ -105,9 +105,9 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
           )) : <div className="px-5 py-8 text-center"><p className="text-sm font-semibold text-[#14213D]">No appointments assigned today</p><p className="mt-1 text-xs text-[#64748B]">Your schedule will appear here when a booking is assigned to you.</p></div>}
         </article>
 
-        <article className="salon-card rounded-2xl p-4">
-          <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-extrabold text-[#14213D]">My Profile</h2><button type="button" onClick={() => onNavigate('profile')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0B5ED7]">Edit Profile <ArrowRight className="h-4 w-4" /></button></div>
-          <div className="flex flex-wrap items-center gap-4">
+        <article className="salon-card rounded-2xl p-4 xl:p-3">
+          <div className="mb-3 flex items-center justify-between xl:mb-2"><h2 className="text-lg font-extrabold text-[#14213D]">My Profile</h2><button type="button" onClick={() => onNavigate('profile')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0B5ED7]">Edit Profile <ArrowRight className="h-4 w-4" /></button></div>
+          <div className="flex flex-wrap items-center gap-4 xl:gap-3">
             <StylistAvatar src={stylist?.avatar_url} name={user.name} size="lg" />
             <div className="min-w-0 flex-1"><h3 className="text-lg font-extrabold text-[#14213D]">{user.name}</h3><p className="text-sm font-semibold text-[#475467]">{stylist?.role || 'Stylist'}</p>
               <p className="mt-3 break-all text-xs text-[#14213D]">{user.email}</p><p className="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-700"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Active</p>
@@ -116,23 +116,23 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
         </article>
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.9fr)_minmax(210px,0.65fr)]">
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.9fr)_minmax(210px,0.65fr)] xl:gap-2">
         <article className="salon-card rounded-2xl p-3 sm:p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#14213D]"><Zap className="h-5 w-5 fill-[#0D6EFD] text-[#0D6EFD]" />Quick Actions</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#14213D] xl:mb-2"><Zap className="h-5 w-5 fill-[#0D6EFD] text-[#0D6EFD]" />Quick Actions</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {actions.map(({ label, tab, Icon }) => <button key={label} type="button" onClick={() => onNavigate(tab)} className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border border-[#D8E1FA] bg-[#F3F5FF] p-2 text-center text-[11px] font-bold text-[#14213D] transition hover:border-[#0D6EFD] hover:bg-[#E8F1FF]"><Icon className="h-6 w-6 text-[#0D6EFD]" />{label}</button>)}
+            {actions.map(({ label, tab, Icon }) => <button key={label} type="button" onClick={() => onNavigate(tab)} className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border border-[#D8E1FA] bg-[#F3F5FF] p-2 text-center text-[11px] font-bold text-[#14213D] transition hover:border-[#0D6EFD] hover:bg-[#E8F1FF] xl:min-h-[66px] xl:gap-1 xl:p-1.5"><Icon className="h-6 w-6 text-[#0D6EFD] xl:h-5 xl:w-5" />{label}</button>)}
           </div>
         </article>
         <article className="salon-card overflow-hidden rounded-2xl">
-          <div className="flex items-center justify-between border-b border-[#DDE6F1] px-4 py-3"><h2 className="flex items-center gap-2 text-lg font-extrabold text-[#14213D]"><Bell className="h-5 w-5" />Notifications</h2><button type="button" onClick={() => onNavigate('notifications')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0B5ED7]">View All <ArrowRight className="h-4 w-4" /></button></div>
-          <div className="divide-y divide-[#E7ECF5]">{notifications.length ? notifications.map(({ key, title, detail, Icon, color, tab }) => <button key={key} type="button" onClick={() => onNavigate(tab)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#F8FAFF]"><span className={'flex h-8 w-8 shrink-0 items-center justify-center rounded-full ' + color}><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-xs font-bold text-[#14213D]">{title}</span><span className="mt-1 block text-[11px] leading-4 text-[#475467]">{detail}</span></span></button>) : <p className="px-4 py-8 text-center text-xs text-[#667085]">You’re all caught up.</p>}</div>
+          <div className="flex items-center justify-between border-b border-[#DDE6F1] px-4 py-3 xl:py-2"><h2 className="flex items-center gap-2 text-lg font-extrabold text-[#14213D]"><Bell className="h-5 w-5" />Notifications</h2><button type="button" onClick={() => onNavigate('notifications')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0B5ED7]">View All <ArrowRight className="h-4 w-4" /></button></div>
+          <div className="divide-y divide-[#E7ECF5]">{notifications.length ? notifications.map(({ key, title, detail, Icon, color, tab }) => <button key={key} type="button" onClick={() => onNavigate(tab)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-[#F8FAFF] xl:py-2"><span className={'flex h-8 w-8 shrink-0 items-center justify-center rounded-full ' + color}><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-xs font-bold text-[#14213D]">{title}</span><span className="mt-1 block text-[11px] leading-4 text-[#475467]">{detail}</span></span></button>) : <p className="px-4 py-8 text-center text-xs text-[#667085]">You’re all caught up.</p>}</div>
         </article>
-        <article className="salon-card flex flex-col items-center rounded-2xl p-4 text-center">
-          <h2 className="mb-3 flex items-center gap-2 self-start text-lg font-extrabold text-[#14213D]"><ChartNoAxesColumnIncreasing className="h-5 w-5 text-[#0D6EFD]" />Your Performance</h2>
-          <div className="flex h-32 w-32 items-center justify-center rounded-full p-2" style={{ background: 'conic-gradient(#10A66A ' + performance + '%, #DCE5F1 0)' }}><div className="flex h-full w-full items-center justify-center rounded-full bg-white text-2xl font-extrabold text-[#14213D]">{performance}%</div></div>
+        <article className="salon-card flex flex-col items-center rounded-2xl p-4 text-center xl:p-3">
+          <h2 className="mb-3 flex items-center gap-2 self-start text-lg font-extrabold text-[#14213D] xl:mb-2"><ChartNoAxesColumnIncreasing className="h-5 w-5 text-[#0D6EFD]" />Your Performance</h2>
+          <div className="flex h-32 w-32 items-center justify-center rounded-full p-2 xl:h-24 xl:w-24" style={{ background: 'conic-gradient(#10A66A ' + performance + '%, #DCE5F1 0)' }}><div className="flex h-full w-full items-center justify-center rounded-full bg-white text-2xl font-extrabold text-[#14213D]">{performance}%</div></div>
           <p className="mt-3 text-sm font-extrabold text-[#14213D]">{performance >= 90 ? 'Excellent Performance' : performance >= 70 ? 'Good Progress' : 'Keep Building'}</p>
           <p className="mt-1 text-[11px] text-[#64748B]">Based on completed appointments today.</p>
-          <button type="button" onClick={() => onNavigate('reports')} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#071B53] px-3 py-2 text-xs font-bold text-white">View Reports <ArrowRight className="h-4 w-4" /></button>
+          <button type="button" onClick={() => onNavigate('reports')} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#071B53] px-3 py-2 text-xs font-bold text-white xl:mt-2 xl:py-1.5">View Reports <ArrowRight className="h-4 w-4" /></button>
         </article>
       </section>
     </div>

@@ -19,6 +19,7 @@ import {
   Settings,
   Database,
   CircleHelp,
+  X,
 } from 'lucide-react';
 import type { StaffUser, WorkspaceTab } from '../types';
 
@@ -28,6 +29,8 @@ interface SidebarRailProps {
   onSelectTab: (tab: WorkspaceTab) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
   cartCount: number;
   lowStockCount: number;
   supportRequestCount: number;
@@ -86,6 +89,8 @@ export function SidebarRail({
   onSelectTab,
   collapsed,
   onToggleCollapse,
+  mobileOpen,
+  onCloseMobile,
   cartCount,
   lowStockCount,
   supportRequestCount,
@@ -94,12 +99,17 @@ export function SidebarRail({
   onLogout,
 }: SidebarRailProps) {
   const visibleNavItems = user.role === 'admin' ? ADMIN_NAV_ITEMS : EMPLOYEE_NAV_ITEMS;
+  const getBadgeCount = (id: WorkspaceTab) =>
+    id === 'pos' && cartCount > 0 ? cartCount
+      : id === 'inventory' && lowStockCount > 0 ? lowStockCount
+        : id === 'support' ? supportRequestCount
+          : id === 'notifications' ? notificationCount : 0;
 
   return (
     <>
       {/* Desktop Beauty Boutique Navigation Rail */}
       <aside
-        className={`no-print hidden md:flex flex-col justify-between text-[#F4F7FC] shrink-0 transition-[width] duration-200 border-r border-[#10284E] shadow-[12px_0_30px_-24px_rgba(8,27,54,0.36)] ${
+        className={`no-print sticky top-0 hidden h-screen self-start md:flex flex-col justify-between text-[#F4F7FC] shrink-0 transition-[width] duration-200 border-r border-[#10284E] shadow-[12px_0_30px_-24px_rgba(8,27,54,0.36)] ${
           collapsed ? 'w-[80px]' : 'w-[248px]'
         } beauty-sidebar`}
       >
@@ -154,13 +164,7 @@ export function SidebarRail({
           <nav className="p-3 space-y-1.5" aria-label="Primary Navigation">
             {visibleNavItems.map(({ id, label, Icon }) => {
               const isActive = activeTab === id;
-              const badgeCount =
-                id === 'pos' && cartCount > 0
-                  ? cartCount
-                  : id === 'inventory' && lowStockCount > 0
-                    ? lowStockCount
-                    : id === 'support' ? supportRequestCount
-                      : id === 'notifications' ? notificationCount : 0;
+              const badgeCount = getBadgeCount(id);
 
               return (
                 <button
@@ -216,29 +220,32 @@ export function SidebarRail({
         </div>
       </aside>
 
-      {/* Mobile Compact Bottom Bar (<= 15% viewport height) */}
-      <nav
-        aria-label="Mobile Navigation"
-        className="no-print md:hidden fixed bottom-0 inset-x-0 z-40 beauty-sidebar border-t border-white/10 flex h-16 overflow-x-auto px-1"
-      >
-        {visibleNavItems.map(({ id, shortLabel, Icon }) => {
-          const isActive = activeTab === id;
-          const badgeCount = id === 'notifications' ? notificationCount : 0;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onSelectTab(id)}
-              className={`flex min-w-[72px] flex-1 flex-col items-center justify-center gap-1 rounded-lg text-[11px] font-semibold transition-colors ${
-                isActive ? 'text-white bg-[#0D6EFD]/90' : 'text-[#DCEBFF]/75'
-              }`}
-            >
-              <span className="relative"><Icon className="h-4 w-4 shrink-0" />{badgeCount > 0 && <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#F42F43] px-1 text-[9px] font-bold text-white">{badgeCount > 9 ? '9+' : badgeCount}</span>}</span>
-              <span className="truncate max-w-full px-1">{shortLabel}</span>
-            </button>
-          );
-        })}
-      </nav>
+      {mobileOpen && <div className="no-print fixed inset-0 z-50 md:hidden">
+        <button type="button" aria-label="Close navigation menu" onClick={onCloseMobile} className="absolute inset-0 bg-[#071426]/55" />
+        <aside role="dialog" aria-modal="true" aria-label="Workspace navigation" className="relative flex h-full w-[min(86vw,300px)] flex-col text-[#F4F7FC] shadow-2xl beauty-sidebar">
+          <div className="flex h-[72px] items-center justify-between border-b border-white/10 px-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#B7D2FF]/60 bg-white/10 text-[#F4B629]"><Crown className="h-4 w-4" /></span>
+              <div className="min-w-0"><span className="block truncate font-serif-editorial text-base font-semibold italic text-[#F4B629]">{businessName}</span><span className="mt-0.5 block text-[9px] uppercase tracking-[0.18em] text-[#B7D2FF]">Beauty & Atelier</span></div>
+            </div>
+            <button type="button" aria-label="Close navigation menu" onClick={onCloseMobile} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#D5E4FF]/80 hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
+          </div>
+          <nav aria-label="Primary Navigation" className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="space-y-1">{visibleNavItems.map(({ id, label, Icon }) => {
+              const isActive = activeTab === id;
+              const badgeCount = getBadgeCount(id);
+              return <button key={id} type="button" onClick={() => { onSelectTab(id); onCloseMobile(); }} className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold ${isActive ? 'bg-gradient-to-r from-[#1479FF] to-[#0757D8] text-white' : 'text-[#DCEBFF]/85 hover:bg-white/10 hover:text-white'}`}>
+                <span className="flex min-w-0 items-center gap-3"><Icon className="h-4 w-4 shrink-0" /><span className="truncate">{label}</span></span>
+                {badgeCount > 0 && <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold text-white">{badgeCount > 9 ? '9+' : badgeCount}</span>}
+              </button>;
+            })}</div>
+          </nav>
+          <div className="flex items-center justify-between border-t border-white/10 bg-[#081B36]/70 p-4">
+            <div className="min-w-0"><p className="truncate text-xs font-bold text-white">{user.name}</p><p className="text-[9px] uppercase tracking-[0.12em] text-[#D5E4FF]/70">{user.role === 'admin' ? 'Owner / Admin' : 'Employee'}</p></div>
+            <button type="button" onClick={onLogout} aria-label="Sign out" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#D5E4FF]/80 hover:bg-white/10 hover:text-white"><LogOut className="h-4 w-4" /></button>
+          </div>
+        </aside>
+      </div>}
     </>
   );
 }

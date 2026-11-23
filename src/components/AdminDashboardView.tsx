@@ -112,7 +112,7 @@ function RevenueChart({ date, points, loading, error }: {
           </div>
           <svg
             aria-label={`Sales trend ending ${date}`}
-            className="h-36 w-full overflow-visible"
+            className="h-36 w-full overflow-visible xl:h-32"
             role="img"
             viewBox="0 0 720 212"
             preserveAspectRatio="none"
@@ -267,7 +267,7 @@ function RecentActivityPanel({ date, appointments, clients, tickets, employees, 
 
   return (
     <section className="salon-card overflow-hidden rounded-2xl lg:col-span-3">
-      <div className="flex items-center justify-between gap-2 border-b border-[#E1E7F0] px-3 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-[#E1E7F0] px-3 py-3 xl:py-2">
         <h2 className="font-sans text-sm font-bold text-[#14213D]">Recent activity</h2>
         <button type="button" onClick={onViewAll} className="text-[10px] font-bold text-[#0B5ED7] hover:underline">
           View all
@@ -276,7 +276,7 @@ function RecentActivityPanel({ date, appointments, clients, tickets, employees, 
       {activities.length ? (
         <div className="divide-y divide-[#EEF1F6] px-4">
           {activities.map(({ id, title, detail, createdAt, Icon, color }) => (
-            <article key={id} className="flex items-center gap-2.5 py-2">
+            <article key={id} className="flex items-center gap-2.5 py-2 xl:py-1.5">
               <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${color}`}>
                 <Icon className="h-3.5 w-3.5" />
               </span>
@@ -340,7 +340,7 @@ function EmployeeOverview({ employees, stylists, loading, error, onViewAll }: {
   const activeEmployees = employees.filter((employee) => employee.active);
   return (
     <section className="salon-card overflow-hidden rounded-2xl lg:col-span-4">
-      <div className="flex items-center justify-between border-b border-[#E1E7F0] px-3 py-3">
+      <div className="flex items-center justify-between border-b border-[#E1E7F0] px-3 py-3 xl:py-2">
         <h2 className="font-sans text-sm font-bold text-[#14213D]">Employee overview</h2>
         <button type="button" onClick={onViewAll} className="text-[10px] font-bold text-[#0B5ED7] hover:underline">View all</button>
       </div>
@@ -359,7 +359,7 @@ function EmployeeOverview({ employees, stylists, loading, error, onViewAll }: {
           {activeEmployees.slice(0, 4).map((employee) => {
             const stylist = stylists.find((item) => item.id === employee.stylist_id);
             return (
-              <div key={employee.id} className="flex items-center gap-2.5 py-2">
+              <div key={employee.id} className="flex items-center gap-2.5 py-2 xl:py-1.5">
                 <StylistAvatar src={stylist?.avatar_url} name={employee.name} size="sm" />
                 <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#14213D]">{employee.name}</span>
                 <span className="hidden text-[10px] text-[#667085] sm:block">{stylist?.role || 'Employee'}</span>
@@ -465,7 +465,7 @@ export function AdminDashboardView({ userName, date, data, onNavigate }: AdminDa
   ];
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 xl:space-y-2">
       <section className="relative isolate overflow-hidden rounded-2xl border border-[#0B3B7A] bg-gradient-to-r from-[#081B36] via-[#0A3472] to-[#0757D8] px-4 py-3 text-white shadow-[0_16px_34px_-24px_rgba(10,29,58,0.42)] sm:px-5">
         <div aria-hidden="true" className="pointer-events-none absolute -right-3 -top-8 opacity-[0.12]">
           <ShieldCheck className="h-40 w-40" strokeWidth={1} />

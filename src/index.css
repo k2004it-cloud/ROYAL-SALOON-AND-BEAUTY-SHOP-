@@ -148,6 +148,24 @@ textarea:focus-visible {
   animation: beauty-shimmer 1.35s ease-in-out infinite;
 }
 
+@media (min-width: 1024px) {
+  .workspace-content .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-block-start: 0.9rem !important;
+  }
+
+  .workspace-content .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+    margin-block-start: 0.75rem !important;
+  }
+
+  .workspace-content .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-block-start: 0.625rem !important;
+  }
+
+  .workspace-content .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-block-start: 0.5rem !important;
+  }
+}
+
 @keyframes beauty-shimmer {
   to {
     background-position: -200% 0;

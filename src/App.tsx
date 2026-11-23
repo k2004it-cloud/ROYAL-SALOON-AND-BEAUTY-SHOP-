@@ -106,7 +106,22 @@ export default function App() {
     tabFromPath(window.location.pathname, initialRole)
   );
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [businessDate, setBusinessDate] = useState<string>(todayIsoDate);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
 
   const [data, setData] = useState<BootstrapPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -645,6 +660,8 @@ export default function App() {
         onSelectTab={navigateToTab}
         collapsed={railCollapsed}
         onToggleCollapse={() => setRailCollapsed((c) => !c)}
+        mobileOpen={mobileMenuOpen}
+        onCloseMobile={() => setMobileMenuOpen(false)}
         cartCount={cart.reduce((sum, line) => sum + line.quantity, 0)}
         lowStockCount={authUser.role === 'employee'
           ? (data.employee_dashboard?.low_stock_items.length ?? 0)
@@ -655,16 +672,19 @@ export default function App() {
         onLogout={() => void handleLogout()}
       />
 
-      <main className={`min-h-screen flex-1 min-w-0 bg-transparent p-4 sm:p-6 ${activeTab === 'dashboard' ? 'lg:p-5' : 'lg:p-8'} pb-24 md:pb-8`}>
-        <div className="max-w-[1440px] mx-auto">
+      <main className="min-h-screen min-w-0 flex-1 bg-transparent p-3 pb-4 sm:p-4 md:pb-6 lg:p-4">
+        <div className="workspace-content mx-auto max-w-[1440px]">
           {demoMode && (
             <p className="no-print mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900">
               Demo data environment. Do not enter real customer information.
             </p>
           )}
-          <div className="no-print mb-5 flex items-center gap-3 rounded-2xl border border-[#D8E4F2] bg-white/95 px-3 py-3 shadow-[0_12px_30px_-24px_rgba(15,42,84,0.16)] sm:px-4">
-            <button type="button" aria-label="Toggle navigation" onClick={() => setRailCollapsed((value) => !value)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#071B53] hover:bg-[#EFF4FF]">
-              <Menu className="h-6 w-6" />
+          <div className="no-print mb-3 flex items-center gap-2 rounded-2xl border border-[#D8E4F2] bg-white/95 px-2 py-2 shadow-[0_12px_30px_-24px_rgba(15,42,84,0.16)] sm:px-3">
+            <button type="button" aria-label="Open navigation" aria-expanded={mobileMenuOpen} onClick={() => {
+              if (window.matchMedia('(max-width: 767px)').matches) setMobileMenuOpen((open) => !open);
+              else setRailCollapsed((value) => !value);
+            }} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#071B53] hover:bg-[#EFF4FF]">
+              <Menu className="h-5 w-5" />
             </button>
             <div className="relative min-w-0 flex-1">
               <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#344E91]" />
