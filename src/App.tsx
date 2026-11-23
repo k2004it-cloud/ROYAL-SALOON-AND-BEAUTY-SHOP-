@@ -27,6 +27,10 @@ import { AdminDashboardView } from './components/AdminDashboardView';
 import { SystemPages } from './components/SystemPages';
 import { EmployeePages } from './components/EmployeePages';
 import { NotificationsView } from './components/NotificationsView';
+import { AttendanceView } from './components/AttendanceView';
+import { EmployeeAttendanceView } from './components/EmployeeAttendanceView';
+import { TasksView } from './components/TasksView';
+import { PayrollView } from './components/PayrollView';
 import { Bell, CalendarDays, ChevronDown, Crown, LogOut, Menu, Search } from 'lucide-react';
 
 const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
@@ -39,6 +43,9 @@ const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
     'pos',
     'inventory',
     'reports',
+    'payroll',
+    'attendance',
+    'tasks',
     'notifications',
     'settings',
     'system-logs',
@@ -220,58 +227,72 @@ export default function App() {
     void refreshData(businessDate);
   }, [authUser, businessDate, refreshData]);
 
+  const syncWorkspace = useCallback(async () => {
+    if (!authUser || document.visibilityState !== 'visible') return;
+    void refreshData(businessDate);
+    try {
+      const [status, supportResult, announcementResult] = await Promise.all([
+        salonApi.authStatus(),
+        salonApi.listSupportRequests(),
+        salonApi.listAnnouncements(),
+      ]);
+      setUnreadAnnouncementCount(announcementResult.unread_count);
+      if (status.user?.role === 'admin') {
+        setOpenSupportCount(supportResult.requests.filter((request) => request.status !== 'resolved').length);
+      } else if (status.user?.role === 'employee') {
+        const lastSeen = Number(window.localStorage.getItem('salon-support-seen-' + status.user.id) || 0);
+        setOpenSupportCount(supportResult.requests.filter((request) =>
+          Boolean(request.admin_reply.trim()) && new Date(request.updated_at).getTime() > lastSeen
+        ).length);
+      }
+      setAuthUser((current) => {
+        if (!status.user) return null;
+        if (
+          current &&
+          current.id === status.user.id &&
+          current.name === status.user.name &&
+          current.username === status.user.username &&
+          current.email === status.user.email &&
+          current.phone === status.user.phone &&
+          current.stylist_id === status.user.stylist_id &&
+          current.role === status.user.role &&
+          current.active === status.user.active
+        ) return current;
+        return status.user;
+      });
+    } catch {
+      // Keep the current workspace visible during a temporary sync outage.
+    }
+  }, [authUser, businessDate, refreshData]);
+
   useEffect(() => {
     if (!authUser) return;
-    let active = true;
-    const syncWorkspace = async () => {
-      if (document.visibilityState !== 'visible') return;
-      void refreshData(businessDate);
-      try {
-        const [status, supportResult, announcementResult] = await Promise.all([
-          salonApi.authStatus(),
-          salonApi.listSupportRequests(),
-          salonApi.listAnnouncements(),
-        ]);
-        if (!active) return;
-        setUnreadAnnouncementCount(announcementResult.unread_count);
-        if (status.user?.role === 'admin') {
-          setOpenSupportCount(supportResult.requests.filter((request) => request.status !== 'resolved').length);
-        } else if (status.user?.role === 'employee') {
-          const lastSeen = Number(window.localStorage.getItem('salon-support-seen-' + status.user.id) || 0);
-          setOpenSupportCount(supportResult.requests.filter((request) =>
-            Boolean(request.admin_reply.trim()) && new Date(request.updated_at).getTime() > lastSeen
-          ).length);
-        }
-        setAuthUser((current) => {
-          if (!status.user) return null;
-          if (
-            current &&
-            current.id === status.user.id &&
-            current.name === status.user.name &&
-            current.username === status.user.username &&
-            current.email === status.user.email &&
-            current.phone === status.user.phone &&
-            current.stylist_id === status.user.stylist_id &&
-            current.role === status.user.role &&
-            current.active === status.user.active
-          ) return current;
-          return status.user;
-        });
-      } catch {
-        // Keep the current workspace visible during a temporary sync outage.
-      }
-    };
     void syncWorkspace();
-    const interval = window.setInterval(() => void syncWorkspace(), 8000);
+    const fallbackInterval = window.setInterval(() => void syncWorkspace(), 60000);
     window.addEventListener('focus', syncWorkspace);
     document.addEventListener('visibilitychange', syncWorkspace);
     return () => {
-      active = false;
-      window.clearInterval(interval);
+      window.clearInterval(fallbackInterval);
       window.removeEventListener('focus', syncWorkspace);
       document.removeEventListener('visibilitychange', syncWorkspace);
     };
-  }, [authUser, businessDate, refreshData]);
+  }, [authUser?.id, syncWorkspace]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    const events = new EventSource('/api/events');
+    const handleWorkspaceUpdate = () => {
+      window.dispatchEvent(new Event('salon:workspace-updated'));
+      void syncWorkspace();
+    };
+    events.onopen = () => { void syncWorkspace(); };
+    events.addEventListener('workspace-updated', handleWorkspaceUpdate);
+    return () => {
+      events.onopen = null;
+      events.removeEventListener('workspace-updated', handleWorkspaceUpdate);
+      events.close();
+    };
+  }, [authUser?.id, syncWorkspace]);
 
   useEffect(() => {
     if (authUser?.role !== 'employee' || activeTab !== 'support') return;
@@ -506,6 +527,8 @@ export default function App() {
         { label: 'My Profile', tab: 'profile' },
         { label: 'Notifications', tab: 'notifications' },
         { label: 'Reports', tab: 'reports' },
+        { label: 'My Attendance', tab: 'timesheet' },
+        { label: 'My Tasks', tab: 'tasks' },
         { label: 'Help & Support', tab: 'support' },
         { label: 'Schedule', tab: 'schedule' },
       ]
@@ -519,6 +542,9 @@ export default function App() {
         { label: 'Sales & Payments', tab: 'pos' },
         { label: 'Inventory', tab: 'inventory' },
         { label: 'Reports', tab: 'reports' },
+        { label: 'Commission Payroll', tab: 'payroll' },
+        { label: 'Staff Attendance', tab: 'attendance' },
+        { label: 'Staff Tasks', tab: 'tasks' },
         { label: 'Settings', tab: 'settings' },
         { label: 'Support & Help', tab: 'support' },
       ];
@@ -709,8 +735,6 @@ export default function App() {
             'earnings',
             'my-appointments',
             'my-clients',
-            'timesheet',
-            'tasks',
             'profile',
             'inventory',
             'reports',
@@ -733,6 +757,10 @@ export default function App() {
             />
           )}
           {activeTab === 'notifications' && <NotificationsView user={authUser} />}
+          {activeTab === 'timesheet' && authUser.role === 'employee' && <EmployeeAttendanceView />}
+          {activeTab === 'attendance' && authUser.role === 'admin' && <AttendanceView />}
+          {activeTab === 'tasks' && <TasksView user={authUser} />}
+          {activeTab === 'payroll' && authUser.role === 'admin' && <PayrollView />}
           {activeTab === 'schedule' && (
             <ScheduleView
               date={businessDate}

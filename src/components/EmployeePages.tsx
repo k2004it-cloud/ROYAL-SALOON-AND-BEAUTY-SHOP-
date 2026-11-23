@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Activity, Bell, CalendarDays, CheckCircle2, Clock3, LockKeyhole, PackageSearch, Search, ShoppingBag, UsersRound, WalletCards } from 'lucide-react';
+import { Activity, Bell, CalendarDays, CheckCircle2, CircleDollarSign, Clock3, LockKeyhole, PackageSearch, Search, ShoppingBag, UsersRound, WalletCards } from 'lucide-react';
 import type { Appointment, AppointmentStatus, CatalogItem, Client, EmployeeDashboard, EmployeeEarningsReport, StaffUser, Stylist, WorkspaceTab } from '../types';
 import { formatKsh, salonApi } from '../api/client';
 import { StatusBadge } from './StatusBadge';
@@ -99,14 +99,15 @@ export function EmployeePages({ tab, appointments, clients, catalog, stylists, u
       }
     };
     void loadReport();
-    const interval = window.setInterval(() => {
+    const refreshReport = () => {
       if (document.visibilityState === 'visible') void loadReport();
-    }, 8000);
-    window.addEventListener('focus', loadReport);
+    };
+    window.addEventListener('focus', refreshReport);
+    window.addEventListener('salon:workspace-updated', refreshReport);
     return () => {
       active = false;
-      window.clearInterval(interval);
-      window.removeEventListener('focus', loadReport);
+      window.removeEventListener('focus', refreshReport);
+      window.removeEventListener('salon:workspace-updated', refreshReport);
     };
   }, [tab, earningsStart, earningsEnd]);
 
@@ -290,16 +291,20 @@ export function EmployeePages({ tab, appointments, clients, catalog, stylists, u
         <div className="space-y-4">
           <section className="salon-card flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4"><div><h2 className="text-lg font-bold text-[#14213D]">Choose date range</h2><p className="mt-1 text-xs text-[#64748B]">Only sales attributed to your stylist profile are included.</p></div>{dateRangeControls}</section>
           {earningsError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{earningsError}</p>}
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {[
               { label: 'Sales attributed to me', value: formatKsh(earningsReport?.total_sales_ksh ?? 0), Icon: ShoppingBag },
               { label: 'Commission earned', value: formatKsh(earningsReport?.total_commission_ksh ?? 0), Icon: WalletCards },
+              { label: 'Commission paid', value: formatKsh(earningsReport?.commission_paid_ksh ?? 0), Icon: CheckCircle2 },
+              { label: 'Commission still due', value: formatKsh(earningsReport?.commission_balance_ksh ?? 0), Icon: CircleDollarSign },
               { label: 'Paid tickets', value: String(earningsReport?.ticket_count ?? 0), Icon: CheckCircle2 },
-              { label: 'Appointments completed', value: String(completed.length), Icon: CalendarDays },
             ].map(({ label, value, Icon }) => <article key={label} className="salon-card rounded-2xl p-5"><Icon className="h-5 w-5 text-[#0D6EFD]" /><p className="mt-3 text-xs font-bold uppercase text-[#64748B]">{label}</p><p className="mt-2 text-2xl font-extrabold text-[#14213D]">{earningsLoading ? '…' : value}</p></article>)}
           </section>
           <section className="salon-card overflow-hidden rounded-2xl"><div className="border-b border-[#E1E7F0] px-5 py-4"><h2 className="text-lg font-bold text-[#14213D]">Earnings details</h2></div>
-            {earningsReport?.tickets.length ? <div className="divide-y divide-[#E1E7F0]">{earningsReport.tickets.map((ticket) => <article key={ticket.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_1.2fr_1fr_1fr] sm:items-center"><div><p className="text-sm font-bold text-[#14213D]">{ticket.ticket_number}</p><p className="text-xs text-[#64748B]">{ticket.business_date}</p></div><p className="text-xs text-[#475467]">{ticket.client_name} · {ticket.payment_method}</p><p className="text-xs font-semibold text-[#14213D]">{formatKsh(ticket.attributed_sales_ksh)} sales</p><p className="text-xs font-bold text-emerald-700">{formatKsh(ticket.commission_ksh)} commission</p></article>)}</div> : <EmptyCard text={earningsLoading ? 'Loading earnings…' : 'No paid tickets attributed to you in this date range.'} />}
+            {earningsReport?.tickets.length ? <div className="divide-y divide-[#E1E7F0]">{earningsReport.tickets.map((ticket) => <article key={ticket.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_1.2fr_1fr_1fr_1fr] sm:items-center"><div><p className="text-sm font-bold text-[#14213D]">{ticket.ticket_number}</p><p className="text-xs text-[#64748B]">{ticket.business_date}</p></div><p className="text-xs text-[#475467]">{ticket.client_name} · {ticket.payment_method}</p><p className="text-xs font-semibold text-[#14213D]">{formatKsh(ticket.attributed_sales_ksh)} sales</p><p className="text-xs font-bold text-emerald-700">{formatKsh(ticket.commission_ksh)} earned · {formatKsh(ticket.commission_paid_ksh)} paid</p><p className="text-xs font-bold text-amber-700">{formatKsh(ticket.commission_ksh - ticket.commission_paid_ksh)} due</p></article>)}</div> : <EmptyCard text={earningsLoading ? 'Loading earnings…' : 'No paid tickets attributed to you in this date range.'} />}
+          </section>
+          <section className="salon-card overflow-hidden rounded-2xl"><div className="border-b border-[#E1E7F0] px-5 py-4"><h2 className="text-lg font-bold text-[#14213D]">Payouts recorded for this period</h2><p className="mt-1 text-xs text-[#64748B]">Ask your administrator if you have a question about a listed payment.</p></div>
+            {earningsReport?.payouts.length ? <div className="divide-y divide-[#E1E7F0]">{earningsReport.payouts.map((payout) => <article key={payout.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_1fr_1fr_1.4fr]"><p className="text-xs font-semibold text-[#14213D]">{new Date(payout.paid_at).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })}</p><p className="text-sm font-extrabold text-emerald-700">{formatKsh(payout.amount_ksh)}</p><p className="text-xs text-[#475467]">{payout.payment_method}{payout.reference ? ' · ' + payout.reference : ''}</p><p className="text-xs text-[#64748B]">{payout.notes || 'Recorded by ' + payout.recorded_by_name}</p></article>)}</div> : <EmptyCard text="No commission payouts were allocated to tickets in this date range." />}
           </section>
           <button type="button" onClick={() => onNavigate('reports')} className="rounded-lg border border-[#DDE6F1] bg-white px-4 py-2.5 text-sm font-bold text-[#0757D8]">Open detailed report</button>
         </div>

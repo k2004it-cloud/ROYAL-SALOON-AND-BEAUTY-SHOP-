@@ -58,6 +58,8 @@ async function waitForPython(maxWaitMs = 5000): Promise<void> {
 
 async function proxyToPython(req: Request, res: Response): Promise<void> {
   const targetUrl = `${PYTHON_URL}${req.originalUrl}`;
+  const isEventStream = req.path === '/api/events';
+  const abortController = isEventStream ? new AbortController() : null;
   const headers: Record<string, string> = {};
   if (req.headers['content-type']) {
     headers['content-type'] = String(req.headers['content-type']);
@@ -72,6 +74,7 @@ async function proxyToPython(req: Request, res: Response): Promise<void> {
   const init: RequestInit = {
     method: req.method,
     headers,
+    ...(abortController ? { signal: abortController.signal } : {}),
   };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -98,6 +101,26 @@ async function proxyToPython(req: Request, res: Response): Promise<void> {
     if (contentType) res.setHeader('Content-Type', contentType);
     if (disposition) res.setHeader('Content-Disposition', disposition);
     if (setCookie) res.setHeader('Set-Cookie', setCookie);
+
+    if (isEventStream && upstream.body) {
+      res.setHeader('Cache-Control', contentType ? (upstream.headers.get('cache-control') || 'no-cache') : 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+      res.on('close', () => abortController?.abort());
+      try {
+        for await (const chunk of upstream.body) {
+          if (!res.write(Buffer.from(chunk))) {
+            await new Promise<void>((resolve) => res.once('drain', resolve));
+          }
+        }
+      } catch (err) {
+        if (!res.destroyed) console.error('Workspace event stream ended:', err);
+      } finally {
+        if (!res.destroyed) res.end();
+      }
+      return;
+    }
 
     const buf = Buffer.from(await upstream.arrayBuffer());
     res.send(buf);

@@ -251,6 +251,63 @@ def init_db() -> None:
                 commission_ksh INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS commission_payouts (
+                id TEXT PRIMARY KEY,
+                employee_user_id TEXT NOT NULL,
+                stylist_id TEXT NOT NULL,
+                amount_ksh INTEGER NOT NULL CHECK(amount_ksh > 0),
+                payment_method TEXT NOT NULL CHECK(payment_method IN ('Cash', 'M-Pesa', 'Bank Transfer')),
+                reference TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                paid_at TEXT NOT NULL,
+                recorded_by_user_id TEXT NOT NULL,
+                recorded_by_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (employee_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (recorded_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS commission_payout_items (
+                id TEXT PRIMARY KEY,
+                payout_id TEXT NOT NULL,
+                ticket_item_id TEXT NOT NULL,
+                amount_ksh INTEGER NOT NULL CHECK(amount_ksh > 0),
+                FOREIGN KEY (payout_id) REFERENCES commission_payouts(id) ON DELETE CASCADE,
+                FOREIGN KEY (ticket_item_id) REFERENCES ticket_items(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_commission_payout_items_ticket
+                ON commission_payout_items(ticket_item_id);
+
+            CREATE TABLE IF NOT EXISTS attendance_records (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                work_date TEXT NOT NULL,
+                clock_in TEXT NOT NULL,
+                clock_out TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, work_date),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS staff_tasks (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                assigned_to_user_id TEXT NOT NULL,
+                created_by_user_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('assigned', 'in_progress', 'completed')),
+                due_date TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (assigned_to_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_staff_tasks_assignee_status
+                ON staff_tasks(assigned_to_user_id, status, due_date);
             """
         )
 
@@ -300,6 +357,30 @@ def init_db() -> None:
         if DEMO_MODE:
             _ensure_demo_users(conn)
         else:
+            demo_ids = ("usr-demo-admin", "usr-demo-employee")
+            placeholders = ", ".join("?" for _ in demo_ids)
+            payout_ids = conn.execute(
+                f"SELECT id FROM commission_payouts WHERE employee_user_id IN ({placeholders}) OR recorded_by_user_id IN ({placeholders})",
+                (*demo_ids, *demo_ids),
+            ).fetchall()
+            if payout_ids:
+                payout_placeholders = ", ".join("?" for _ in payout_ids)
+                conn.execute(
+                    f"DELETE FROM commission_payout_items WHERE payout_id IN ({payout_placeholders})",
+                    tuple(row["id"] for row in payout_ids),
+                )
+                conn.execute(
+                    f"DELETE FROM commission_payouts WHERE id IN ({payout_placeholders})",
+                    tuple(row["id"] for row in payout_ids),
+                )
+            conn.execute(
+                f"DELETE FROM attendance_records WHERE user_id IN ({placeholders})",
+                demo_ids,
+            )
+            conn.execute(
+                f"DELETE FROM staff_tasks WHERE assigned_to_user_id IN ({placeholders}) OR created_by_user_id IN ({placeholders})",
+                (*demo_ids, *demo_ids),
+            )
             conn.execute("DELETE FROM users WHERE id IN ('usr-demo-admin', 'usr-demo-employee')")
 
         conn.commit()
@@ -871,6 +952,12 @@ def compute_employee_earnings(conn: sqlite3.Connection, stylist_id: str, start_d
                t.client_name, t.payment_method,
                COALESCE(SUM(ti.line_total_ksh), 0) AS attributed_sales_ksh,
                COALESCE(SUM(ti.commission_ksh), 0) AS commission_ksh,
+               COALESCE((
+                   SELECT SUM(payout_item.amount_ksh)
+                   FROM ticket_items earned_item
+                   JOIN commission_payout_items payout_item ON payout_item.ticket_item_id = earned_item.id
+                   WHERE earned_item.ticket_id = t.id AND earned_item.stylist_id = ?
+               ), 0) AS commission_paid_ksh,
                COALESCE(SUM(ti.quantity), 0) AS quantity
         FROM tickets t
         JOIN ticket_items ti ON ti.ticket_id = t.id
@@ -879,7 +966,7 @@ def compute_employee_earnings(conn: sqlite3.Connection, stylist_id: str, start_d
         GROUP BY t.id
         ORDER BY t.business_date DESC, t.created_at DESC
         """,
-        (stylist_id, start_date, end_date),
+        (stylist_id, stylist_id, start_date, end_date),
     ).fetchall()
     items = conn.execute(
         """
@@ -896,16 +983,86 @@ def compute_employee_earnings(conn: sqlite3.Connection, stylist_id: str, start_d
         """,
         (stylist_id, start_date, end_date),
     ).fetchall()
+    commission_paid_ksh = conn.execute(
+        """
+        SELECT COALESCE(SUM(payout_item.amount_ksh), 0)
+        FROM commission_payout_items payout_item
+        JOIN ticket_items ti ON ti.id = payout_item.ticket_item_id
+        JOIN tickets t ON t.id = ti.ticket_id
+        WHERE ti.stylist_id = ? AND t.status = 'Paid'
+          AND t.business_date BETWEEN ? AND ?
+        """,
+        (stylist_id, start_date, end_date),
+    ).fetchone()[0]
+    payouts = conn.execute(
+        """
+        SELECT p.id, p.payment_method, p.reference, p.notes, p.paid_at,
+               p.recorded_by_name, SUM(pi.amount_ksh) AS amount_ksh
+        FROM commission_payouts p
+        JOIN commission_payout_items pi ON pi.payout_id = p.id
+        JOIN ticket_items ti ON ti.id = pi.ticket_item_id
+        JOIN tickets t ON t.id = ti.ticket_id
+        WHERE ti.stylist_id = ? AND t.status = 'Paid'
+          AND t.business_date BETWEEN ? AND ?
+        GROUP BY p.id
+        ORDER BY p.paid_at DESC
+        """,
+        (stylist_id, start_date, end_date),
+    ).fetchall()
+    ticket_values = [dict(row) for row in tickets]
     return {
         "start_date": start_date,
         "end_date": end_date,
         "total_sales_ksh": sum(row["revenue_ksh"] for row in daily),
         "total_commission_ksh": sum(row["commission_ksh"] for row in daily),
+        "commission_paid_ksh": int(commission_paid_ksh),
+        "commission_balance_ksh": sum(row["commission_ksh"] for row in daily) - int(commission_paid_ksh),
         "ticket_count": sum(row["ticket_count"] for row in daily),
         "daily": daily,
-        "tickets": [dict(row) for row in tickets],
+        "tickets": ticket_values,
         "items": [dict(row) for row in items],
+        "payouts": [dict(row) for row in payouts],
     }
+
+
+def commission_totals(conn: sqlite3.Connection, stylist_id: str) -> dict[str, int]:
+    earned = conn.execute(
+        """
+        SELECT COALESCE(SUM(ti.commission_ksh), 0)
+        FROM ticket_items ti
+        JOIN tickets t ON t.id = ti.ticket_id
+        WHERE ti.stylist_id = ? AND ti.commission_ksh > 0 AND t.status = 'Paid'
+        """,
+        (stylist_id,),
+    ).fetchone()[0]
+    paid = conn.execute(
+        """
+        SELECT COALESCE(SUM(pi.amount_ksh), 0)
+        FROM commission_payout_items pi
+        JOIN ticket_items ti ON ti.id = pi.ticket_item_id
+        JOIN tickets t ON t.id = ti.ticket_id
+        WHERE ti.stylist_id = ? AND t.status = 'Paid'
+        """,
+        (stylist_id,),
+    ).fetchone()[0]
+    return {"earned_ksh": int(earned), "paid_ksh": int(paid), "balance_ksh": int(earned) - int(paid)}
+
+
+def outstanding_commission_items(conn: sqlite3.Connection, stylist_id: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT ti.id AS ticket_item_id,
+               ti.commission_ksh - COALESCE(SUM(pi.amount_ksh), 0) AS outstanding_ksh
+        FROM ticket_items ti
+        JOIN tickets t ON t.id = ti.ticket_id
+        LEFT JOIN commission_payout_items pi ON pi.ticket_item_id = ti.id
+        WHERE ti.stylist_id = ? AND ti.commission_ksh > 0 AND t.status = 'Paid'
+        GROUP BY ti.id
+        HAVING ti.commission_ksh > COALESCE(SUM(pi.amount_ksh), 0)
+        ORDER BY t.business_date, t.created_at, ti.id
+        """,
+        (stylist_id,),
+    ).fetchall()
 
 
 def fetch_tickets(conn: sqlite3.Connection, date_str: str | None = None) -> list[dict]:
@@ -927,6 +1084,8 @@ def fetch_tickets(conn: sqlite3.Connection, date_str: str | None = None) -> list
 
 
 class SalonHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     protocol_version = "HTTP/1.1"
 
     def log_message(self, format: str, *args) -> None:
@@ -960,6 +1119,37 @@ class SalonHandler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length).decode("utf-8")
         return json.loads(raw) if raw else {}
 
+    def _stream_workspace_events(self) -> None:
+        observer = get_conn()
+        try:
+            last_version = observer.execute("PRAGMA data_version").fetchone()[0]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache, no-transform")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+            self.wfile.write(b": connected\n\n")
+            self.wfile.flush()
+            last_heartbeat = time.monotonic()
+
+            while True:
+                time.sleep(0.4)
+                current_version = observer.execute("PRAGMA data_version").fetchone()[0]
+                if current_version != last_version:
+                    last_version = current_version
+                    self.wfile.write(b"event: workspace-updated\ndata: {}\n\n")
+                    self.wfile.flush()
+                    last_heartbeat = time.monotonic()
+                elif time.monotonic() - last_heartbeat >= 15:
+                    self.wfile.write(b": keep-alive\n\n")
+                    self.wfile.flush()
+                    last_heartbeat = time.monotonic()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            observer.close()
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
@@ -969,6 +1159,19 @@ class SalonHandler(BaseHTTPRequestHandler):
 
         if path == "/api/health":
             self._send_json(200, {"status": "ok", "engine": "python-sqlite"})
+            return
+
+        if path == "/api/events":
+            with DB_LOCK:
+                conn = get_conn()
+                try:
+                    user = _current_user(conn, self.headers.get("Cookie"))
+                finally:
+                    conn.close()
+            if not user:
+                self._send_json(401, {"error": "Sign in to continue."})
+                return
+            self._stream_workspace_events()
             return
 
         if path == "/api/auth/status":
@@ -1068,6 +1271,98 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"announcements": announcements, "unread_count": unread_count})
                     return
 
+                if path == "/api/payroll/commissions":
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required."})
+                        return
+                    staff_rows = conn.execute(
+                        """
+                        SELECT u.id, u.name, u.username, u.stylist_id, u.active, s.name AS stylist_name
+                        FROM users u LEFT JOIN stylists s ON s.id = u.stylist_id
+                        WHERE u.role = 'employee' ORDER BY u.name
+                        """
+                    ).fetchall()
+                    employees = []
+                    for staff in staff_rows:
+                        totals = commission_totals(conn, staff["stylist_id"] or "")
+                        employees.append(dict(staff) | totals)
+                    payouts = conn.execute(
+                        """
+                        SELECT p.id, p.employee_user_id, u.name AS employee_name,
+                               p.amount_ksh, p.payment_method, p.reference, p.notes,
+                               p.paid_at, p.recorded_by_name
+                        FROM commission_payouts p
+                        JOIN users u ON u.id = p.employee_user_id
+                        ORDER BY p.paid_at DESC LIMIT 200
+                        """
+                    ).fetchall()
+                    self._send_json(200, {"employees": employees, "payouts": [dict(row) for row in payouts]})
+                    return
+
+                if path in {"/api/attendance", "/api/employee/attendance"}:
+                    employee_view = path == "/api/employee/attendance"
+                    if employee_view and user["role"] != "employee":
+                        self._send_json(403, {"error": "Employee attendance is available only to the signed-in employee."})
+                        return
+                    if not employee_view and user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required."})
+                        return
+                    if employee_view:
+                        end_date = qs.get("end", [today])[0]
+                        try:
+                            end = datetime.date.fromisoformat(end_date)
+                            start_date = qs.get("start", [(end - datetime.timedelta(days=29)).isoformat()])[0]
+                            start = datetime.date.fromisoformat(start_date)
+                            if (end - start).days < 0 or (end - start).days > 365:
+                                raise ValueError("date range is invalid")
+                        except ValueError:
+                            self._send_json(400, {"error": "Choose a valid attendance date range of up to 366 days."})
+                            return
+                        rows = conn.execute(
+                            "SELECT * FROM attendance_records WHERE user_id = ? AND work_date BETWEEN ? AND ? ORDER BY work_date DESC",
+                            (user["id"], start_date, end_date),
+                        ).fetchall()
+                    else:
+                        try:
+                            filter_date = qs.get("date", [today])[0]
+                            datetime.date.fromisoformat(filter_date)
+                        except ValueError:
+                            self._send_json(400, {"error": "Choose a valid attendance date."})
+                            return
+                        rows = conn.execute(
+                            """
+                            SELECT a.*, u.name AS employee_name, u.username,
+                                   s.name AS stylist_name
+                            FROM attendance_records a
+                            JOIN users u ON u.id = a.user_id
+                            LEFT JOIN stylists s ON s.id = u.stylist_id
+                            WHERE u.role = 'employee' AND a.work_date = ?
+                            ORDER BY a.clock_in
+                            """,
+                            (filter_date,),
+                        ).fetchall()
+                    self._send_json(200, {"records": [dict(row) for row in rows]})
+                    return
+
+                if path == "/api/tasks":
+                    query = """
+                        SELECT t.*, assignee.name AS assignee_name,
+                               creator.name AS creator_name
+                        FROM staff_tasks t
+                        JOIN users assignee ON assignee.id = t.assigned_to_user_id
+                        JOIN users creator ON creator.id = t.created_by_user_id
+                    """
+                    if user["role"] == "employee":
+                        query += " WHERE t.assigned_to_user_id = ?"
+                        params = (user["id"],)
+                    else:
+                        query += " WHERE assignee.role = 'employee'"
+                        params = ()
+                    query += " ORDER BY CASE t.status WHEN 'assigned' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, CASE WHEN t.due_date = '' THEN 1 ELSE 0 END, t.due_date, t.created_at DESC"
+                    rows = conn.execute(query, params).fetchall()
+                    self._send_json(200, {"tasks": [dict(row) for row in rows]})
+                    return
+
                 if path in {"/api/employee/earnings", "/api/employee/earnings/export"}:
                     if user["role"] != "employee":
                         self._send_json(403, {"error": "Employee earnings are available only to the signed-in employee."})
@@ -1092,7 +1387,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                     if path.endswith("/export"):
                         output = io.StringIO(newline="")
                         writer = csv.writer(output)
-                        writer.writerow(["Date", "Ticket", "Client", "Payment method", "Attributed sales (KSh)", "Commission (KSh)", "Items"])
+                        writer.writerow(["Date", "Ticket", "Client", "Payment method", "Attributed sales (KSh)", "Commission earned (KSh)", "Commission paid (KSh)", "Commission balance (KSh)", "Items"])
                         for ticket in report["tickets"]:
                             writer.writerow([
                                 ticket["business_date"],
@@ -1101,6 +1396,8 @@ class SalonHandler(BaseHTTPRequestHandler):
                                 ticket["payment_method"],
                                 ticket["attributed_sales_ksh"],
                                 ticket["commission_ksh"],
+                                ticket["commission_paid_ksh"],
+                                ticket["commission_ksh"] - ticket["commission_paid_ksh"],
                                 ticket["quantity"],
                             ])
                         payload = output.getvalue().encode("utf-8-sig")
@@ -1445,6 +1742,167 @@ class SalonHandler(BaseHTTPRequestHandler):
                     _record_audit_event(conn, user, "change_password", "account", "Account password changed.")
                     conn.commit()
                     self._send_json(200, {"changed": True})
+                    return
+
+                if path in {"/api/employee/attendance/clock-in", "/api/employee/attendance/clock-out"}:
+                    if user["role"] != "employee":
+                        self._send_json(403, {"error": "Employee attendance is available only to the signed-in employee."})
+                        return
+                    now = datetime.datetime.now().astimezone()
+                    work_date = now.date().isoformat()
+                    now_iso = now.isoformat(timespec="seconds")
+                    existing = conn.execute(
+                        "SELECT * FROM attendance_records WHERE user_id = ? AND work_date = ?",
+                        (user["id"], work_date),
+                    ).fetchone()
+                    if path.endswith("/clock-in"):
+                        if existing:
+                            message = "You are already clocked in." if not existing["clock_out"] else "You have already completed attendance for today."
+                            self._send_json(409, {"error": message})
+                            return
+                        record_id = f"att-{uuid.uuid4().hex[:12]}"
+                        conn.execute(
+                            "INSERT INTO attendance_records (id, user_id, work_date, clock_in, clock_out, created_at) VALUES (?, ?, ?, ?, '', ?)",
+                            (record_id, user["id"], work_date, now_iso, now_iso),
+                        )
+                        summary = "Employee clocked in."
+                    else:
+                        if not existing or existing["clock_out"]:
+                            self._send_json(409, {"error": "Clock in before clocking out."})
+                            return
+                        record_id = existing["id"]
+                        conn.execute("UPDATE attendance_records SET clock_out = ? WHERE id = ?", (now_iso, record_id))
+                        summary = "Employee clocked out."
+                    _record_audit_event(conn, user, "clock_in" if path.endswith("/clock-in") else "clock_out", "attendance", summary, record_id)
+                    conn.commit()
+                    record = conn.execute("SELECT * FROM attendance_records WHERE id = ?", (record_id,)).fetchone()
+                    self._send_json(200, {"record": dict(record)})
+                    return
+
+                if path == "/api/tasks":
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required to assign tasks."})
+                        return
+                    title = body.get("title", "")
+                    description = body.get("description", "")
+                    assignee_id = body.get("assigned_to_user_id", "")
+                    due_date = body.get("due_date", "")
+                    if not all(isinstance(value, str) for value in (title, description, assignee_id, due_date)):
+                        self._send_json(400, {"error": "Task fields must be text values."})
+                        return
+                    title, description, assignee_id, due_date = title.strip(), description.strip(), assignee_id.strip(), due_date.strip()
+                    if not title or len(title) > 120 or len(description) > 1000:
+                        self._send_json(400, {"error": "Task title is required (120 characters max) and description must be 1000 characters or fewer."})
+                        return
+                    if due_date:
+                        try:
+                            datetime.date.fromisoformat(due_date)
+                        except ValueError:
+                            self._send_json(400, {"error": "Choose a valid task due date."})
+                            return
+                    assignee = conn.execute("SELECT id FROM users WHERE id = ? AND role = 'employee' AND active = 1", (assignee_id,)).fetchone()
+                    if not assignee:
+                        self._send_json(400, {"error": "Choose an active employee for this task."})
+                        return
+                    task_id = f"task-{uuid.uuid4().hex[:12]}"
+                    now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute(
+                        """
+                        INSERT INTO staff_tasks
+                            (id, title, description, assigned_to_user_id, created_by_user_id, status, due_date, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, 'assigned', ?, ?, ?)
+                        """,
+                        (task_id, title, description, assignee_id, user["id"], due_date, now_iso, now_iso),
+                    )
+                    _record_audit_event(conn, user, "assign", "staff_task", f"Assigned task: {title}.", task_id)
+                    conn.commit()
+                    task = conn.execute(
+                        """
+                        SELECT t.*, assignee.name AS assignee_name, creator.name AS creator_name
+                        FROM staff_tasks t
+                        JOIN users assignee ON assignee.id = t.assigned_to_user_id
+                        JOIN users creator ON creator.id = t.created_by_user_id
+                        WHERE t.id = ?
+                        """,
+                        (task_id,),
+                    ).fetchone()
+                    self._send_json(201, {"task": dict(task)})
+                    return
+
+                if path == "/api/payroll/payouts":
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required to record commission payouts."})
+                        return
+                    employee_id = body.get("employee_id", "")
+                    payment_method = body.get("payment_method", "")
+                    reference = body.get("reference", "")
+                    notes = body.get("notes", "")
+                    raw_amount = body.get("amount_ksh", 0)
+                    if isinstance(raw_amount, bool) or (isinstance(raw_amount, float) and not raw_amount.is_integer()):
+                        self._send_json(400, {"error": "Enter a whole-number payout amount."})
+                        return
+                    try:
+                        amount_ksh = int(raw_amount)
+                    except (TypeError, ValueError):
+                        self._send_json(400, {"error": "Enter a whole-number payout amount."})
+                        return
+                    if not isinstance(employee_id, str) or not isinstance(payment_method, str) or not isinstance(reference, str) or not isinstance(notes, str):
+                        self._send_json(400, {"error": "Payout fields must be text values."})
+                        return
+                    reference, notes = reference.strip(), notes.strip()
+                    if amount_ksh <= 0 or amount_ksh > 100000000:
+                        self._send_json(400, {"error": "Payout amount must be a positive whole number."})
+                        return
+                    if payment_method not in {"Cash", "M-Pesa", "Bank Transfer"} or len(reference) > 100 or len(notes) > 500:
+                        self._send_json(400, {"error": "Choose a payment method and keep the reference and note within their limits."})
+                        return
+                    employee = conn.execute(
+                        "SELECT id, name, stylist_id FROM users WHERE id = ? AND role = 'employee'",
+                        (employee_id,),
+                    ).fetchone()
+                    if not employee or not employee["stylist_id"]:
+                        self._send_json(404, {"error": "Employee account or stylist profile was not found."})
+                        return
+                    outstanding = outstanding_commission_items(conn, employee["stylist_id"])
+                    balance_ksh = sum(int(row["outstanding_ksh"]) for row in outstanding)
+                    if amount_ksh > balance_ksh:
+                        self._send_json(409, {"error": f"Payout exceeds the unpaid commission balance of KSh {balance_ksh:,}.", "balance_ksh": balance_ksh})
+                        return
+                    payout_id = f"pay-{uuid.uuid4().hex[:12]}"
+                    paid_at = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+                    conn.execute(
+                        """
+                        INSERT INTO commission_payouts
+                            (id, employee_user_id, stylist_id, amount_ksh, payment_method, reference, notes, paid_at, recorded_by_user_id, recorded_by_name, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (payout_id, employee["id"], employee["stylist_id"], amount_ksh, payment_method, reference, notes, paid_at, user["id"], user["name"], paid_at),
+                    )
+                    remaining = amount_ksh
+                    for item in outstanding:
+                        if remaining <= 0:
+                            break
+                        allocated = min(remaining, int(item["outstanding_ksh"]))
+                        conn.execute(
+                            "INSERT INTO commission_payout_items (id, payout_id, ticket_item_id, amount_ksh) VALUES (?, ?, ?, ?)",
+                            (f"payi-{uuid.uuid4().hex[:12]}", payout_id, item["ticket_item_id"], allocated),
+                        )
+                        remaining -= allocated
+                    _record_audit_event(conn, user, "pay", "commission", f"Recorded KSh {amount_ksh:,} commission payout to {employee['name']}.", payout_id)
+                    conn.commit()
+                    self._send_json(201, {
+                        "payout": {
+                            "id": payout_id,
+                            "employee_user_id": employee["id"],
+                            "employee_name": employee["name"],
+                            "amount_ksh": amount_ksh,
+                            "payment_method": payment_method,
+                            "reference": reference,
+                            "notes": notes,
+                            "paid_at": paid_at,
+                            "recorded_by_name": user["name"],
+                        }
+                    })
                     return
 
                 if path.startswith("/api/announcements/") and path.endswith("/read"):
@@ -1941,6 +2399,19 @@ class SalonHandler(BaseHTTPRequestHandler):
                         self._send_json(400, {"error": "Ticket is already voided."})
                         return
 
+                    paid_commission = conn.execute(
+                        """
+                        SELECT COALESCE(SUM(pi.amount_ksh), 0)
+                        FROM ticket_items ti
+                        JOIN commission_payout_items pi ON pi.ticket_item_id = ti.id
+                        WHERE ti.ticket_id = ?
+                        """,
+                        (ticket_id,),
+                    ).fetchone()[0]
+                    if paid_commission:
+                        self._send_json(409, {"error": "This ticket includes commission that has already been paid. Resolve the commission payout before voiding it."})
+                        return
+
                     items = conn.execute("SELECT * FROM ticket_items WHERE ticket_id = ?", (ticket_id,)).fetchall()
                     for it in items:
                         if it["kind"] == "product":
@@ -2136,6 +2607,38 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(403, {"error": "Employees can only adjust product stock."})
                     return
 
+                if path.startswith("/api/tasks/"):
+                    task_id = path.rsplit("/", 1)[-1]
+                    task = conn.execute("SELECT * FROM staff_tasks WHERE id = ?", (task_id,)).fetchone()
+                    if not task:
+                        self._send_json(404, {"error": "Task not found."})
+                        return
+                    if user["role"] == "employee" and task["assigned_to_user_id"] != user["id"]:
+                        self._send_json(403, {"error": "You can only update tasks assigned to you."})
+                        return
+                    status = body.get("status")
+                    allowed_statuses = {"assigned", "in_progress", "completed"} if user["role"] == "admin" else {"in_progress", "completed"}
+                    if status not in allowed_statuses:
+                        self._send_json(400, {"error": "Choose a task status available to your role."})
+                        return
+                    now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+                    completed_at = now_iso if status == "completed" else ""
+                    conn.execute("UPDATE staff_tasks SET status = ?, updated_at = ?, completed_at = ? WHERE id = ?", (status, now_iso, completed_at, task_id))
+                    _record_audit_event(conn, user, "update", "staff_task", f"Task marked {status.replace('_', ' ')}.", task_id)
+                    conn.commit()
+                    updated = conn.execute(
+                        """
+                        SELECT t.*, assignee.name AS assignee_name, creator.name AS creator_name
+                        FROM staff_tasks t
+                        JOIN users assignee ON assignee.id = t.assigned_to_user_id
+                        JOIN users creator ON creator.id = t.created_by_user_id
+                        WHERE t.id = ?
+                        """,
+                        (task_id,),
+                    ).fetchone()
+                    self._send_json(200, {"task": dict(updated)})
+                    return
+
                 if path.startswith("/api/appointments/"):
                     apt_id = path.split("/")[-1]
                     existing = conn.execute("SELECT * FROM appointments WHERE id = ?", (apt_id,)).fetchone()
@@ -2320,6 +2823,8 @@ class SalonHandler(BaseHTTPRequestHandler):
 def main() -> None:
     init_db()
     server = ThreadingHTTPServer(("127.0.0.1", PORT), SalonHandler)
+    server.daemon_threads = True
+    server.block_on_close = False
     print(f"Salon Pro Python API listening on http://127.0.0.1:{PORT}", flush=True)
     try:
         server.serve_forever()

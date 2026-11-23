@@ -29,13 +29,13 @@ export function NotificationsView({ user }: { user: StaffUser }) {
     const refresh = () => {
       if (document.visibilityState === 'visible') void load();
     };
-    const interval = window.setInterval(refresh, 8000);
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('salon:workspace-updated', refresh);
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('salon:workspace-updated', refresh);
     };
   }, [load]);
 

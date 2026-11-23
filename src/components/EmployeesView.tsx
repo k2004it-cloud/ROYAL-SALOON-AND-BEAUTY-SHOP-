@@ -39,13 +39,13 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
     const refreshWhileVisible = () => {
       if (document.visibilityState === 'visible') void loadEmployees();
     };
-    const interval = window.setInterval(refreshWhileVisible, 8000);
     window.addEventListener('focus', refreshWhileVisible);
     document.addEventListener('visibilitychange', refreshWhileVisible);
+    window.addEventListener('salon:workspace-updated', refreshWhileVisible);
     return () => {
-      window.clearInterval(interval);
       window.removeEventListener('focus', refreshWhileVisible);
       document.removeEventListener('visibilitychange', refreshWhileVisible);
+      window.removeEventListener('salon:workspace-updated', refreshWhileVisible);
     };
   }, [loadEmployees]);
 

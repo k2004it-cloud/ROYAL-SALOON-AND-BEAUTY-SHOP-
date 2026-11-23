@@ -204,6 +204,12 @@ function SystemLogPage({ date }: Pick<SystemPagesProps, 'date'>) {
     return () => { active = false; };
   }, [filterDate, reloadKey]);
 
+  useEffect(() => {
+    const refresh = () => setReloadKey((value) => value + 1);
+    window.addEventListener('salon:workspace-updated', refresh);
+    return () => window.removeEventListener('salon:workspace-updated', refresh);
+  }, []);
+
   const filteredEntries = useMemo(() => {
     const query = search.trim().toLowerCase();
     return query
@@ -215,7 +221,7 @@ function SystemLogPage({ date }: Pick<SystemPagesProps, 'date'>) {
     <div className="space-y-5">
       <PageHeading eyebrow="Audit trail" title="System logs" description="Review account access and important changes made in the salon workspace." />
       <p className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 text-xs text-[#1E40AF]">
-        The audit trail records successful sign-ins/sign-outs, profile changes, appointments, clients, employees, catalog, payments, and support updates. Passwords and form contents are never stored in these events; low-level server diagnostics are not included.
+        The audit trail records account access, profile changes, appointments, clients, employees, catalog, payments, commission payouts, attendance, staff tasks, and support updates. Passwords and form contents are never stored in these events; low-level server diagnostics are not included.
       </p>
       <section className="salon-card space-y-4 rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-3">
@@ -382,14 +388,16 @@ function SupportPage({ user, businessSettings }: Pick<SystemPagesProps, 'user' |
         .finally(() => { if (active) setLoading(false); });
     };
     loadRequests();
-    const interval = window.setInterval(loadRequests, 8000);
+    const interval = window.setInterval(loadRequests, 60000);
     window.addEventListener('focus', loadRequests);
     document.addEventListener('visibilitychange', loadRequests);
+    window.addEventListener('salon:workspace-updated', loadRequests);
     return () => {
       active = false;
       window.clearInterval(interval);
       window.removeEventListener('focus', loadRequests);
       document.removeEventListener('visibilitychange', loadRequests);
+      window.removeEventListener('salon:workspace-updated', loadRequests);
     };
   }, [reloadKey]);
 

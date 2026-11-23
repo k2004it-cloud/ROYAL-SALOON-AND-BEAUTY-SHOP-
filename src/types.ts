@@ -15,6 +15,8 @@ export type WorkspaceTab =
   | 'employees'
   | 'inventory'
   | 'reports'
+  | 'payroll'
+  | 'attendance'
   | 'settings'
   | 'system-logs'
   | 'backups'
@@ -57,6 +59,7 @@ export interface AuditLogEntry {
 }
 
 export type SupportRequestStatus = 'open' | 'in_progress' | 'resolved';
+export type StaffTaskStatus = 'assigned' | 'in_progress' | 'completed';
 
 export interface SupportRequest {
   id: string;
@@ -84,11 +87,64 @@ export interface Announcement {
   is_read: boolean;
 }
 
+export interface StaffTask {
+  id: string;
+  title: string;
+  description: string;
+  assigned_to_user_id: string;
+  created_by_user_id: string;
+  status: StaffTaskStatus;
+  due_date: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string;
+  assignee_name: string;
+  creator_name: string;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  user_id: string;
+  work_date: string;
+  clock_in: string;
+  clock_out: string;
+  created_at: string;
+  employee_name?: string;
+  username?: string;
+  stylist_name?: string;
+}
+
+export interface CommissionEmployeeSummary {
+  id: string;
+  name: string;
+  username: string;
+  stylist_id: string;
+  stylist_name: string;
+  active: number;
+  earned_ksh: number;
+  paid_ksh: number;
+  balance_ksh: number;
+}
+
+export interface CommissionPayout {
+  id: string;
+  employee_user_id: string;
+  employee_name: string;
+  amount_ksh: number;
+  payment_method: 'Cash' | 'M-Pesa' | 'Bank Transfer';
+  reference: string;
+  notes: string;
+  paid_at: string;
+  recorded_by_name: string;
+}
+
 export interface EmployeeEarningsReport {
   start_date: string;
   end_date: string;
   total_sales_ksh: number;
   total_commission_ksh: number;
+  commission_paid_ksh: number;
+  commission_balance_ksh: number;
   ticket_count: number;
   daily: Array<DailyRevenuePoint & { commission_ksh: number }>;
   tickets: Array<{
@@ -100,6 +156,7 @@ export interface EmployeeEarningsReport {
     payment_method: PaymentMethod;
     attributed_sales_ksh: number;
     commission_ksh: number;
+    commission_paid_ksh: number;
     quantity: number;
   }>;
   items: Array<{
@@ -109,6 +166,7 @@ export interface EmployeeEarningsReport {
     sales_ksh: number;
     commission_ksh: number;
   }>;
+  payouts: Array<Pick<CommissionPayout, 'id' | 'payment_method' | 'reference' | 'notes' | 'paid_at' | 'recorded_by_name'> & { amount_ksh: number }>;
 }
 
 export interface AuthStatus {

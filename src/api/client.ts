@@ -3,15 +3,20 @@ import type {
   AppointmentStatus,
   AuditLogEntry,
   Announcement,
+  AttendanceRecord,
   BootstrapPayload,
   BusinessSettings,
   CatalogItem,
   Client,
+  CommissionEmployeeSummary,
+  CommissionPayout,
   DailyRevenuePoint,
   EmployeeEarningsReport,
   PaymentMethod,
   AuthStatus,
   StaffUser,
+  StaffTask,
+  StaffTaskStatus,
   SupportRequest,
   SupportRequestStatus,
   Ticket,
@@ -111,6 +116,48 @@ export const salonApi = {
 
   employeeEarningsExportUrl(start: string, end: string): string {
     return '/api/employee/earnings/export?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end);
+  },
+
+  commissionPayroll(): Promise<{ employees: CommissionEmployeeSummary[]; payouts: CommissionPayout[] }> {
+    return apiRequest('/api/payroll/commissions');
+  },
+
+  createCommissionPayout(payload: {
+    employee_id: string;
+    amount_ksh: number;
+    payment_method: CommissionPayout['payment_method'];
+    reference: string;
+    notes: string;
+  }): Promise<{ payout: CommissionPayout }> {
+    return apiRequest('/api/payroll/payouts', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  employeeAttendance(start: string, end: string): Promise<{ records: AttendanceRecord[] }> {
+    return apiRequest('/api/employee/attendance?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end));
+  },
+
+  adminAttendance(date: string): Promise<{ records: AttendanceRecord[] }> {
+    return apiRequest('/api/attendance?date=' + encodeURIComponent(date));
+  },
+
+  clockIn(): Promise<{ record: AttendanceRecord }> {
+    return apiRequest('/api/employee/attendance/clock-in', { method: 'POST', body: JSON.stringify({}) });
+  },
+
+  clockOut(): Promise<{ record: AttendanceRecord }> {
+    return apiRequest('/api/employee/attendance/clock-out', { method: 'POST', body: JSON.stringify({}) });
+  },
+
+  listTasks(): Promise<{ tasks: StaffTask[] }> {
+    return apiRequest('/api/tasks');
+  },
+
+  createTask(payload: { title: string; description: string; assigned_to_user_id: string; due_date: string }): Promise<{ task: StaffTask }> {
+    return apiRequest('/api/tasks', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  updateTaskStatus(id: string, status: StaffTaskStatus): Promise<{ task: StaffTask }> {
+    return apiRequest('/api/tasks/' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ status }) });
   },
 
   listAnnouncements(): Promise<{ announcements: Announcement[]; unread_count: number }> {

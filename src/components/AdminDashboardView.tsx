@@ -423,36 +423,30 @@ export function AdminDashboardView({ userName, date, data, onNavigate }: AdminDa
 
   useEffect(() => {
     let active = true;
-    setEmployeesLoading(true);
-    setEmployeesError('');
-    void salonApi.listEmployees()
-      .then(({ employees: result }) => {
-        if (active) setEmployees(result);
-      })
-      .catch((error: unknown) => {
-        if (active) setEmployeesError(error instanceof Error ? error.message : 'Unable to load employees.');
-      })
-      .finally(() => {
-        if (active) setEmployeesLoading(false);
-      });
-    return () => { active = false; };
+    const loadEmployees = () => {
+      setEmployeesError('');
+      void salonApi.listEmployees()
+        .then(({ employees: result }) => { if (active) setEmployees(result); })
+        .catch((error: unknown) => { if (active) setEmployeesError(error instanceof Error ? error.message : 'Unable to load employees.'); })
+        .finally(() => { if (active) setEmployeesLoading(false); });
+    };
+    loadEmployees();
+    window.addEventListener('salon:workspace-updated', loadEmployees);
+    return () => { active = false; window.removeEventListener('salon:workspace-updated', loadEmployees); };
   }, []);
 
   useEffect(() => {
     let active = true;
-    setSalesLoading(true);
-    setSalesError('');
-    void salonApi.analyticsTrend(date, 30)
-      .then(({ points }) => {
-        if (active) setSalesPoints(points);
-      })
-      .catch((error: unknown) => {
-        if (active) setSalesError(error instanceof Error ? error.message : 'Unable to load sales history.');
-      })
-      .finally(() => {
-        if (active) setSalesLoading(false);
-      });
-    return () => { active = false; };
+    const loadSales = () => {
+      setSalesError('');
+      void salonApi.analyticsTrend(date, 30)
+        .then(({ points }) => { if (active) setSalesPoints(points); })
+        .catch((error: unknown) => { if (active) setSalesError(error instanceof Error ? error.message : 'Unable to load sales history.'); })
+        .finally(() => { if (active) setSalesLoading(false); });
+    };
+    loadSales();
+    window.addEventListener('salon:workspace-updated', loadSales);
+    return () => { active = false; window.removeEventListener('salon:workspace-updated', loadSales); };
   }, [date]);
 
   const activeAppointments = data.appointments.filter(
