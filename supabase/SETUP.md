@@ -2,7 +2,7 @@
 
 ## Current status
 
-The migration in `migrations/20261119215800_initial_salon_schema.sql` now describes the tables used by the salon admin and employee features. It enables row-level security and grants browser roles no table access.
+The migrations preserve the original schema history, then add the tables used by the current salon admin and employee features. The forward migration renames the three incompatible legacy tables with a `legacy_v1_` prefix, preserving their data, and enables row-level security on the app tables while removing browser-role access.
 
 The running Python API still uses the local SQLite database. This migration prepares the Supabase schema, but applying it does not switch the app's storage to Supabase. The Python API must be changed to use PostgreSQL before the hosted app can read or write these tables.
 
@@ -16,11 +16,19 @@ The app also currently manages its own employee and admin login sessions. Supaba
 
 ## Apply the schema
 
-For a new, empty project, open **SQL Editor** in the Supabase dashboard, paste the contents of `migrations/20261119215800_initial_salon_schema.sql`, and run it. Or, after signing into the Supabase CLI and linking the project, run `npx supabase db push` from the repository root to apply the versioned migration.
+From the repository root, sign in to the Supabase CLI, link your hosted project, and apply the versioned migrations in order:
+
+```powershell
+npx supabase login
+npx supabase link --project-ref <project-ref>
+npx supabase db push --remote
+```
+
+Use `--remote` so the CLI targets the linked hosted project instead of the local database. If prompted for the database password, enter it in the terminal. Keep this migration workflow in the CLI so Supabase records the migration history correctly.
 
 After it succeeds, the public schema should contain the app tables, including `users`, `appointments`, `tickets`, `attendance_records`, `staff_tasks`, and `inventory_reports`.
 
-Do not apply this initial migration to a database that already has salon data or an earlier version of these tables without reviewing a data migration first.
+The forward migration preserves the prior schema's overlapping tables by renaming them; it does not drop those tables or their data.
 
 ## Connect the app after the project is ready
 
