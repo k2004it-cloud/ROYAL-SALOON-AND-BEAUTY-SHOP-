@@ -94,12 +94,31 @@ export interface StaffTask {
   assigned_to_user_id: string;
   created_by_user_id: string;
   status: StaffTaskStatus;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
   due_date: string;
   created_at: string;
   updated_at: string;
   completed_at: string;
   assignee_name: string;
   creator_name: string;
+}
+
+export type InventoryReportType = 'usage' | 'low_stock' | 'damaged';
+
+export interface InventoryReport {
+  id: string;
+  catalog_item_id: string;
+  item_name: string;
+  report_type: InventoryReportType;
+  quantity: number;
+  note: string;
+  status: 'open' | 'resolved';
+  created_by_user_id: string;
+  created_by_name: string;
+  created_at: string;
+  resolved_by_user_id: string;
+  resolved_at: string;
+  stock_qty?: number;
 }
 
 export interface AttendanceRecord {
@@ -154,6 +173,7 @@ export interface EmployeeEarningsReport {
     created_at: string;
     client_name: string;
     payment_method: PaymentMethod;
+    transaction_reference: string;
     attributed_sales_ksh: number;
     commission_ksh: number;
     commission_paid_ksh: number;
@@ -219,6 +239,7 @@ export interface Client {
   total_spent_ksh: number;
   last_visit: string;
   created_at: string;
+  service_history?: Array<{ date: string; status: string; service_name: string; duration_min: number }>;
 }
 
 export interface Appointment {
@@ -269,6 +290,7 @@ export interface Ticket {
   tax_ksh: number;
   total_ksh: number;
   payment_method: PaymentMethod;
+  transaction_reference: string;
   tendered_ksh: number;
   change_ksh: number;
   status: 'Paid' | 'Voided';
@@ -326,6 +348,8 @@ export interface EmployeeDashboard {
   weekly_sales_ksh: number;
   weekly_commission_ksh: number;
   performance_percent: number;
+  pending_tasks_count: number;
+  overdue_tasks_count: number;
   low_stock_items: Array<{ id: string; name: string; stock_qty: number }>;
   weekly_revenue: DailyRevenuePoint[];
 }

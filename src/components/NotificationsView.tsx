@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Bell, Check, Send } from 'lucide-react';
-import type { Announcement, StaffUser } from '../types';
+import { Bell, CalendarClock, Check, CircleDollarSign, ClipboardCheck, Send } from 'lucide-react';
+import type { Announcement, Appointment, EmployeeDashboard, StaffTask, StaffUser } from '../types';
 import { salonApi } from '../api/client';
 
-export function NotificationsView({ user }: { user: StaffUser }) {
+export function NotificationsView({ user, appointments = [], dashboard }: { user: StaffUser; appointments?: Appointment[]; dashboard?: EmployeeDashboard }) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [tasks, setTasks] = useState<StaffTask[]>([]);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -14,15 +15,19 @@ export function NotificationsView({ user }: { user: StaffUser }) {
 
   const load = useCallback(async () => {
     try {
-      const result = await salonApi.listAnnouncements();
+      const [result, taskResult] = await Promise.all([
+        salonApi.listAnnouncements(),
+        user.role === 'employee' ? salonApi.listTasks() : Promise.resolve({ tasks: [] as StaffTask[] }),
+      ]);
       setAnnouncements(result.announcements);
+      setTasks(taskResult.tasks);
       setError('');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to load announcements.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user.role]);
 
   useEffect(() => {
     void load();
@@ -68,6 +73,29 @@ export function NotificationsView({ user }: { user: StaffUser }) {
   };
 
   const unreadCount = announcements.filter((item) => item.sender_user_id !== user.id && !item.is_read).length;
+  const workAlerts = [
+    ...appointments.filter((appointment) => ['Pending', 'Confirmed', 'In-Service'].includes(appointment.status)).slice(0, 5).map((appointment) => ({
+      key: 'appointment-' + appointment.id,
+      title: 'Appointment reminder',
+      detail: `${appointment.start_time} · ${appointment.client_name} · ${appointment.service_name}`,
+      Icon: CalendarClock,
+      tone: 'text-blue-700 bg-blue-100',
+    })),
+    ...tasks.filter((task) => task.status !== 'completed').slice(0, 5).map((task) => ({
+      key: 'task-' + task.id,
+      title: task.priority === 'urgent' ? 'Urgent task' : 'Task alert',
+      detail: `${task.title}${task.due_date ? ` · Due ${task.due_date}` : ''}`,
+      Icon: ClipboardCheck,
+      tone: task.priority === 'urgent' || task.priority === 'high' ? 'text-red-700 bg-red-100' : 'text-violet-700 bg-violet-100',
+    })),
+    ...((dashboard?.today_sales_ksh ?? 0) > 0 ? [{
+      key: 'payments-today',
+      title: 'Payment update',
+      detail: `${dashboard?.today_sales_ksh ? `Sales attributed to you today: KSh ${dashboard.today_sales_ksh.toLocaleString('en-KE')}` : ''}`,
+      Icon: CircleDollarSign,
+      tone: 'text-emerald-700 bg-emerald-100',
+    }] : []),
+  ];
 
   return (
     <div className="space-y-5">
@@ -76,6 +104,8 @@ export function NotificationsView({ user }: { user: StaffUser }) {
         <h1 className="mt-2 text-2xl font-extrabold sm:text-3xl">Notifications</h1>
         <p className="mt-2 text-sm text-[#E6F0FF]">Publish updates for all signed-in salon staff and read team announcements.</p>
       </section>
+
+      {user.role === 'employee' && <section className="salon-card overflow-hidden rounded-2xl"><div className="border-b border-[#E1E7F0] px-5 py-4"><h2 className="text-lg font-bold text-[#14213D]">Workday alerts</h2><p className="mt-1 text-xs text-[#64748B]">Appointments, task deadlines and payment activity for your account.</p></div>{workAlerts.length ? <div className="divide-y divide-[#E7ECF5]">{workAlerts.map(({ key, title, detail, Icon, tone }) => <article key={key} className="flex items-start gap-3 px-5 py-3"><span className={'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ' + tone}><Icon className="h-4 w-4" /></span><span><strong className="block text-sm text-[#14213D]">{title}</strong><span className="text-xs text-[#64748B]">{detail}</span></span></article>)}</div> : <p className="px-5 py-6 text-sm text-[#64748B]">You’re up to date on appointments and tasks.</p>}</section>}
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.4fr)]">
         <form onSubmit={(event) => void publish(event)} className="salon-card space-y-4 rounded-2xl p-5">

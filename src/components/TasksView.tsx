@@ -15,6 +15,7 @@ export function TasksView({ user }: { user: StaffUser }) {
   const [description, setDescription] = useState('');
   const [assignee, setAssignee] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [priority, setPriority] = useState<StaffTask['priority']>('normal');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -57,10 +58,11 @@ export function TasksView({ user }: { user: StaffUser }) {
     setError('');
     setNotice('');
     try {
-      await salonApi.createTask({ title, description, assigned_to_user_id: assignee, due_date: dueDate });
+      await salonApi.createTask({ title, description, assigned_to_user_id: assignee, priority, due_date: dueDate });
       setTitle('');
       setDescription('');
       setDueDate('');
+      setPriority('normal');
       setNotice('Task assigned to the employee.');
       await load();
       window.dispatchEvent(new Event('salon:workspace-updated'));
@@ -101,6 +103,7 @@ export function TasksView({ user }: { user: StaffUser }) {
         <label className="text-xs font-semibold text-[#344054]">Task title<input required maxLength={120} value={title} onChange={(event) => setTitle(event.target.value)} className="salon-input mt-1 w-full px-3 text-sm" placeholder="e.g. Prepare closing station" /></label>
         <label className="text-xs font-semibold text-[#344054]">Assign to<select required value={assignee} onChange={(event) => setAssignee(event.target.value)} className="salon-input mt-1 w-full px-3 text-sm"><option value="">Select employee</option>{employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}</select></label>
         <label className="text-xs font-semibold text-[#344054]">Due date<input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="salon-input mt-1 w-full px-3 text-sm" /></label>
+        <label className="text-xs font-semibold text-[#344054]">Priority<select value={priority} onChange={(event) => setPriority(event.target.value as StaffTask['priority'])} className="salon-input mt-1 w-full px-3 text-sm"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
         <label className="text-xs font-semibold text-[#344054]">Details<textarea rows={2} maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} className="mt-1 w-full rounded-lg border border-[#DDE6F1] px-3 py-2 text-sm text-[#14213D]" /></label>
         <div className="md:col-span-2"><button type="submit" disabled={saving || !employees.length} className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#0D6EFD] px-4 text-sm font-bold text-white disabled:opacity-50"><Plus className="h-4 w-4" />{saving ? 'Assigning…' : 'Assign task'}</button></div>
       </form>}
@@ -110,7 +113,7 @@ export function TasksView({ user }: { user: StaffUser }) {
         <div className="flex items-center gap-2 border-b border-[#E1E7F0] px-5 py-4"><ClipboardCheck className="h-5 w-5 text-[#0D6EFD]" /><div><h2 className="text-lg font-bold text-[#14213D]">{isAdmin ? 'All assignments' : 'Assigned to me'}</h2><p className="mt-1 text-xs text-[#64748B]">Task status is shared with the other workspace.</p></div></div>
         {loading ? <p className="px-5 py-10 text-center text-sm text-[#64748B]">Loading tasks…</p> : tasks.length ? <div className="divide-y divide-[#E7ECF5]">{tasks.map((task) => <article key={task.id} className="flex flex-wrap items-start gap-3 px-5 py-4">
           <span className={'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ' + (task.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : task.status === 'in_progress' ? 'bg-amber-100 text-amber-700' : 'bg-[#E8F1FF] text-[#0D6EFD]')}>{task.status === 'completed' ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}</span>
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-bold text-[#14213D]">{task.title}</h3><span className="rounded-full bg-[#F1F4F9] px-2 py-1 text-[9px] font-bold text-[#475467]">{taskStatusLabel(task.status)}</span></div>{task.description && <p className="mt-1 whitespace-pre-wrap text-xs text-[#475467]">{task.description}</p>}<p className="mt-2 text-[10px] text-[#64748B]">{isAdmin ? `For ${task.assignee_name}` : `Assigned by ${task.creator_name}`}{task.due_date ? ` · Due ${task.due_date}` : ''}</p></div>
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="text-sm font-bold text-[#14213D]">{task.title}</h3><span className="rounded-full bg-[#F1F4F9] px-2 py-1 text-[9px] font-bold text-[#475467]">{taskStatusLabel(task.status)}</span><span className={'rounded-full px-2 py-1 text-[9px] font-bold uppercase ' + (task.priority === 'urgent' ? 'bg-red-100 text-red-700' : task.priority === 'high' ? 'bg-orange-100 text-orange-700' : task.priority === 'low' ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-700')}>{task.priority || 'normal'}</span></div>{task.description && <p className="mt-1 whitespace-pre-wrap text-xs text-[#475467]">{task.description}</p>}<p className="mt-2 text-[10px] text-[#64748B]">{isAdmin ? `For ${task.assignee_name}` : `Assigned by ${task.creator_name}`}{task.due_date ? ` · Due ${task.due_date}` : ''}</p></div>
           {task.status === 'assigned' && <button type="button" onClick={() => void updateStatus(task, 'in_progress')} className="rounded-lg border border-[#B7D2FF] bg-[#EFF6FF] px-3 py-2 text-xs font-bold text-[#0757D8]">Start task</button>}
           {task.status === 'in_progress' && <button type="button" onClick={() => void updateStatus(task, 'completed')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Mark complete</button>}
           {isAdmin && task.status === 'completed' && <button type="button" onClick={() => void updateStatus(task, 'in_progress')} className="inline-flex items-center gap-1 rounded-lg border border-[#DDE6F1] px-3 py-2 text-xs font-bold text-[#475467]"><RotateCcw className="h-3.5 w-3.5" />Reopen</button>}

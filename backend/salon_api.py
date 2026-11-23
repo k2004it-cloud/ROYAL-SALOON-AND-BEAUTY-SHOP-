@@ -230,6 +230,7 @@ def init_db() -> None:
                 tax_ksh INTEGER NOT NULL DEFAULT 0,
                 total_ksh INTEGER NOT NULL,
                 payment_method TEXT NOT NULL CHECK(payment_method IN ('M-Pesa', 'Card', 'Cash')),
+                transaction_reference TEXT NOT NULL DEFAULT '',
                 tendered_ksh INTEGER NOT NULL,
                 change_ksh INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL CHECK(status IN ('Paid', 'Voided')),
@@ -298,6 +299,7 @@ def init_db() -> None:
                 assigned_to_user_id TEXT NOT NULL,
                 created_by_user_id TEXT NOT NULL,
                 status TEXT NOT NULL CHECK(status IN ('assigned', 'in_progress', 'completed')),
+                priority TEXT NOT NULL DEFAULT 'normal',
                 due_date TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -308,10 +310,35 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_staff_tasks_assignee_status
                 ON staff_tasks(assigned_to_user_id, status, due_date);
+
+            CREATE TABLE IF NOT EXISTS inventory_reports (
+                id TEXT PRIMARY KEY,
+                catalog_item_id TEXT NOT NULL,
+                item_name TEXT NOT NULL,
+                report_type TEXT NOT NULL CHECK(report_type IN ('usage', 'low_stock', 'damaged')),
+                quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity >= 0),
+                note TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'resolved')),
+                created_by_user_id TEXT NOT NULL,
+                created_by_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                resolved_by_user_id TEXT NOT NULL DEFAULT '',
+                resolved_at TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY (catalog_item_id) REFERENCES catalog_items(id),
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_inventory_reports_status_created
+                ON inventory_reports(status, created_at DESC);
             """
         )
 
         settings_columns = {row["name"] for row in cur.execute("PRAGMA table_info(business_settings)")}
+        task_columns = {row["name"] for row in cur.execute("PRAGMA table_info(staff_tasks)")}
+        ticket_columns = {row["name"] for row in cur.execute("PRAGMA table_info(tickets)")}
+        if "priority" not in task_columns:
+            cur.execute("ALTER TABLE staff_tasks ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'")
+        if "transaction_reference" not in ticket_columns:
+            cur.execute("ALTER TABLE tickets ADD COLUMN transaction_reference TEXT NOT NULL DEFAULT ''")
         if "opening_time" not in settings_columns:
             cur.execute("ALTER TABLE business_settings ADD COLUMN opening_time TEXT NOT NULL DEFAULT '09:00'")
         if "closing_time" not in settings_columns:
@@ -695,6 +722,30 @@ def fetch_appointments(conn: sqlite3.Connection, date_str: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def attach_employee_client_history(conn: sqlite3.Connection, clients: list[dict], stylist_id: str) -> None:
+    if not clients or not stylist_id:
+        return
+    client_ids = [client["id"] for client in clients]
+    placeholders = ", ".join("?" for _ in client_ids)
+    rows = conn.execute(
+        f"""
+        SELECT a.client_id, a.date, a.status, i.name AS service_name, i.duration_min
+        FROM appointments a
+        JOIN catalog_items i ON i.id = a.service_id
+        WHERE a.stylist_id = ? AND a.status = 'Completed' AND a.client_id IN ({placeholders})
+        ORDER BY a.date DESC, a.start_time DESC
+        """,
+        (stylist_id, *client_ids),
+    ).fetchall()
+    history: dict[str, list[dict]] = {}
+    for row in rows:
+        items = history.setdefault(row["client_id"], [])
+        if len(items) < 5:
+            items.append({key: row[key] for key in ("date", "status", "service_name", "duration_min")})
+    for client in clients:
+        client["service_history"] = history.get(client["id"], [])
+
+
 def check_conflict(
     conn: sqlite3.Connection,
     stylist_id: str,
@@ -839,7 +890,7 @@ def compute_revenue_trend(conn: sqlite3.Connection, end_date: str, days: int) ->
     ]
 
 
-def compute_employee_dashboard(conn: sqlite3.Connection, business_date: str, stylist_id: str) -> dict:
+def compute_employee_dashboard(conn: sqlite3.Connection, business_date: str, stylist_id: str, user_id: str) -> dict:
     selected_date = datetime.date.fromisoformat(business_date)
     week_start = selected_date - datetime.timedelta(days=selected_date.weekday())
     week_end = week_start + datetime.timedelta(days=6)
@@ -902,6 +953,14 @@ def compute_employee_dashboard(conn: sqlite3.Connection, business_date: str, sty
         ORDER BY stock_qty ASC, name ASC LIMIT 10
         """
     ).fetchall()
+    task_counts = conn.execute(
+        """
+        SELECT COALESCE(SUM(CASE WHEN status != 'completed' THEN 1 ELSE 0 END), 0) AS pending,
+               COALESCE(SUM(CASE WHEN status != 'completed' AND due_date != '' AND due_date < ? THEN 1 ELSE 0 END), 0) AS overdue
+        FROM staff_tasks WHERE assigned_to_user_id = ?
+        """,
+        (business_date, user_id),
+    ).fetchone()
 
     return {
         "today_sales_ksh": int(today_sales["sales"] or 0),
@@ -909,6 +968,8 @@ def compute_employee_dashboard(conn: sqlite3.Connection, business_date: str, sty
         "weekly_sales_ksh": sum(int(row["revenue_ksh"] or 0) for row in week_sales),
         "weekly_commission_ksh": sum(int(row["commission_ksh"] or 0) for row in week_sales),
         "performance_percent": round((int(appointment_stats["completed"] or 0) / int(appointment_stats["eligible"] or 1)) * 100) if appointment_stats["eligible"] else 0,
+        "pending_tasks_count": int(task_counts["pending"] or 0),
+        "overdue_tasks_count": int(task_counts["overdue"] or 0),
         "low_stock_items": [dict(row) for row in low_stock_items],
         "weekly_revenue": weekly_revenue,
     }
@@ -949,7 +1010,7 @@ def compute_employee_earnings(conn: sqlite3.Connection, stylist_id: str, start_d
     tickets = conn.execute(
         """
         SELECT t.id, t.ticket_number, t.business_date, t.created_at,
-               t.client_name, t.payment_method,
+               t.client_name, t.payment_method, t.transaction_reference,
                COALESCE(SUM(ti.line_total_ksh), 0) AS attributed_sales_ksh,
                COALESCE(SUM(ti.commission_ksh), 0) AS commission_ksh,
                COALESCE((
@@ -1344,6 +1405,22 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"records": [dict(row) for row in rows]})
                     return
 
+                if path == "/api/inventory/reports":
+                    query = """
+                        SELECT r.*, c.stock_qty
+                        FROM inventory_reports r
+                        JOIN catalog_items c ON c.id = r.catalog_item_id
+                    """
+                    if user["role"] == "employee":
+                        query += " WHERE r.created_by_user_id = ?"
+                        params = (user["id"],)
+                    else:
+                        params = ()
+                    query += " ORDER BY CASE r.status WHEN 'open' THEN 0 ELSE 1 END, r.created_at DESC"
+                    reports = conn.execute(query, params).fetchall()
+                    self._send_json(200, {"reports": [dict(row) for row in reports]})
+                    return
+
                 if path == "/api/tasks":
                     query = """
                         SELECT t.*, assignee.name AS assignee_name,
@@ -1445,6 +1522,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                             clients = []
                         for client in clients:
                             client["total_spent_ksh"] = 0
+                        attach_employee_client_history(conn, clients, user["stylist_id"] or "")
                     appointments = fetch_appointments(conn, date_str)
                     employee_dashboard = None
                     if user["role"] == "employee":
@@ -1454,7 +1532,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         else:
                             appointments = []
                             stylists = []
-                        employee_dashboard = compute_employee_dashboard(conn, date_str, user["stylist_id"] or "")
+                        employee_dashboard = compute_employee_dashboard(conn, date_str, user["stylist_id"] or "", user["id"])
                     if user["role"] == "admin":
                         analytics = compute_analytics(conn, date_str)
                         tickets = fetch_tickets(conn, date_str)
@@ -1491,16 +1569,27 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                 if path == "/api/appointments":
                     appointments = fetch_appointments(conn, date_str)
-                    if user["role"] == "employee" and user["stylist_id"]:
-                        appointments = [appointment for appointment in appointments if appointment["stylist_id"] == user["stylist_id"]]
+                    if user["role"] == "employee":
+                        appointments = [appointment for appointment in appointments if user["stylist_id"] and appointment["stylist_id"] == user["stylist_id"]]
                     self._send_json(200, {"date": date_str, "appointments": appointments})
                     return
 
                 if path == "/api/clients":
                     clients = [dict(r) for r in conn.execute("SELECT * FROM clients ORDER BY name ASC").fetchall()]
                     if user["role"] != "admin":
+                        if user["stylist_id"]:
+                            assigned_client_ids = {
+                                row["client_id"] for row in conn.execute(
+                                    "SELECT DISTINCT client_id FROM appointments WHERE stylist_id = ?",
+                                    (user["stylist_id"],),
+                                ).fetchall()
+                            }
+                            clients = [client for client in clients if client["id"] in assigned_client_ids]
+                        else:
+                            clients = []
                         for client in clients:
                             client["total_spent_ksh"] = 0
+                        attach_employee_client_history(conn, clients, user["stylist_id"] or "")
                     self._send_json(200, {"clients": clients})
                     return
 
@@ -1779,6 +1868,61 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"record": dict(record)})
                     return
 
+                if path == "/api/inventory/reports":
+                    item_id = body.get("catalog_item_id", "")
+                    report_type = body.get("report_type", "")
+                    note = body.get("note", "")
+                    raw_quantity = body.get("quantity", 1)
+                    if not isinstance(item_id, str) or not isinstance(report_type, str) or not isinstance(note, str):
+                        self._send_json(400, {"error": "Inventory report fields are invalid."})
+                        return
+                    if isinstance(raw_quantity, bool) or (isinstance(raw_quantity, float) and not raw_quantity.is_integer()):
+                        self._send_json(400, {"error": "Quantity must be a whole number."})
+                        return
+                    try:
+                        quantity = int(raw_quantity)
+                    except (TypeError, ValueError):
+                        self._send_json(400, {"error": "Quantity must be a whole number."})
+                        return
+                    item = conn.execute("SELECT * FROM catalog_items WHERE id = ? AND kind = 'product' AND active = 1", (item_id,)).fetchone()
+                    if not item:
+                        self._send_json(404, {"error": "Active product was not found."})
+                        return
+                    if report_type not in {"usage", "low_stock", "damaged"} or len(note.strip()) > 500:
+                        self._send_json(400, {"error": "Choose usage, low stock, or damaged and keep the note within 500 characters."})
+                        return
+                    if report_type in {"usage", "damaged"} and (quantity <= 0 or quantity > int(item["stock_qty"])):
+                        self._send_json(400, {"error": f"Enter a quantity from 1 to {item['stock_qty']} for this stock report."})
+                        return
+                    if report_type == "low_stock":
+                        duplicate = conn.execute(
+                            "SELECT 1 FROM inventory_reports WHERE catalog_item_id = ? AND report_type = 'low_stock' AND status = 'open' LIMIT 1",
+                            (item_id,),
+                        ).fetchone()
+                        if duplicate:
+                            self._send_json(409, {"error": "An open low-stock report already exists for this product."})
+                            return
+                        quantity = int(item["stock_qty"])
+                    else:
+                        conn.execute("UPDATE catalog_items SET stock_qty = stock_qty - ? WHERE id = ?", (quantity, item_id))
+                    report_id = f"inv-{uuid.uuid4().hex[:12]}"
+                    created_at = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute(
+                        """
+                        INSERT INTO inventory_reports
+                            (id, catalog_item_id, item_name, report_type, quantity, note, status, created_by_user_id, created_by_name, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)
+                        """,
+                        (report_id, item_id, item["name"], report_type, quantity, note.strip(), user["id"], user["name"], created_at),
+                    )
+                    summary = f"Inventory {report_type.replace('_', ' ')} report for {item['name']} ({quantity} units)."
+                    _record_audit_event(conn, user, "report", "inventory", summary, report_id)
+                    conn.commit()
+                    report = conn.execute("SELECT r.*, c.stock_qty FROM inventory_reports r JOIN catalog_items c ON c.id = r.catalog_item_id WHERE r.id = ?", (report_id,)).fetchone()
+                    updated_item = conn.execute("SELECT * FROM catalog_items WHERE id = ?", (item_id,)).fetchone()
+                    self._send_json(201, {"report": dict(report), "item": dict(updated_item)})
+                    return
+
                 if path == "/api/tasks":
                     if user["role"] != "admin":
                         self._send_json(403, {"error": "Administrator access is required to assign tasks."})
@@ -1787,12 +1931,16 @@ class SalonHandler(BaseHTTPRequestHandler):
                     description = body.get("description", "")
                     assignee_id = body.get("assigned_to_user_id", "")
                     due_date = body.get("due_date", "")
-                    if not all(isinstance(value, str) for value in (title, description, assignee_id, due_date)):
+                    priority = body.get("priority", "normal")
+                    if not all(isinstance(value, str) for value in (title, description, assignee_id, due_date, priority)):
                         self._send_json(400, {"error": "Task fields must be text values."})
                         return
-                    title, description, assignee_id, due_date = title.strip(), description.strip(), assignee_id.strip(), due_date.strip()
+                    title, description, assignee_id, due_date, priority = title.strip(), description.strip(), assignee_id.strip(), due_date.strip(), priority.strip().lower()
                     if not title or len(title) > 120 or len(description) > 1000:
                         self._send_json(400, {"error": "Task title is required (120 characters max) and description must be 1000 characters or fewer."})
+                        return
+                    if priority not in {"low", "normal", "high", "urgent"}:
+                        self._send_json(400, {"error": "Choose low, normal, high, or urgent task priority."})
                         return
                     if due_date:
                         try:
@@ -1809,10 +1957,10 @@ class SalonHandler(BaseHTTPRequestHandler):
                     conn.execute(
                         """
                         INSERT INTO staff_tasks
-                            (id, title, description, assigned_to_user_id, created_by_user_id, status, due_date, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, 'assigned', ?, ?, ?)
+                            (id, title, description, assigned_to_user_id, created_by_user_id, status, priority, due_date, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, 'assigned', ?, ?, ?, ?)
                         """,
-                        (task_id, title, description, assignee_id, user["id"], due_date, now_iso, now_iso),
+                        (task_id, title, description, assignee_id, user["id"], priority, due_date, now_iso, now_iso),
                     )
                     _record_audit_event(conn, user, "assign", "staff_task", f"Assigned task: {title}.", task_id)
                     conn.commit()
@@ -2027,6 +2175,12 @@ class SalonHandler(BaseHTTPRequestHandler):
                     ).fetchone():
                         self._send_json(400, {"error": "Assign this employee to an active stylist profile."})
                         return
+                    if conn.execute(
+                        "SELECT 1 FROM users WHERE role = 'employee' AND active = 1 AND stylist_id = ?",
+                        (stylist_id,),
+                    ).fetchone():
+                        self._send_json(409, {"error": "That stylist profile is already assigned to an active employee."})
+                        return
                     if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
                         self._send_json(409, {"error": "That username is already in use."})
                         return
@@ -2067,12 +2221,19 @@ class SalonHandler(BaseHTTPRequestHandler):
                     notes = body.get("notes", "").strip()
                     status = body.get("status", "Confirmed").strip()
 
-                    if user["role"] == "employee" and user["stylist_id"] and stylist_id != user["stylist_id"]:
+                    if user["role"] == "employee" and (not user["stylist_id"] or stylist_id != user["stylist_id"]):
                         self._send_json(403, {"error": "Employees can only create appointments for their assigned stylist profile."})
                         return
 
                     if not (client_id and stylist_id and service_id):
                         self._send_json(400, {"error": "Client, stylist, and service are required."})
+                        return
+
+                    if user["role"] == "employee" and not conn.execute(
+                        "SELECT 1 FROM appointments WHERE client_id = ? AND stylist_id = ? LIMIT 1",
+                        (client_id, user["stylist_id"]),
+                    ).fetchone():
+                        self._send_json(403, {"error": "You can only book clients already assigned to your profile."})
                         return
 
                     srv = conn.execute("SELECT duration_min FROM catalog_items WHERE id = ?", (service_id,)).fetchone()
@@ -2119,6 +2280,9 @@ class SalonHandler(BaseHTTPRequestHandler):
                     return
 
                 if path == "/api/clients":
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required to create client profiles."})
+                        return
                     name = body.get("name", "").strip()
                     phone = body.get("phone", "").strip()
                     if not name or not phone:
@@ -2182,6 +2346,27 @@ class SalonHandler(BaseHTTPRequestHandler):
                     client_name = body.get("client_name", "").strip() or "Walk-In Guest"
                     appointment_id = body.get("appointment_id", "").strip()
                     payment_method = body.get("payment_method", "M-Pesa").strip()
+                    transaction_reference = body.get("transaction_reference", "")
+                    if not isinstance(transaction_reference, str) or len(transaction_reference.strip()) > 100:
+                        self._send_json(400, {"error": "Transaction reference must be text and 100 characters or fewer."})
+                        return
+                    transaction_reference = transaction_reference.strip()
+                    if user["role"] == "employee":
+                        if not user["stylist_id"]:
+                            self._send_json(403, {"error": "This employee account has no assigned stylist profile."})
+                            return
+                        if client_id and not conn.execute(
+                            "SELECT 1 FROM appointments WHERE client_id = ? AND stylist_id = ? LIMIT 1",
+                            (client_id, user["stylist_id"]),
+                        ).fetchone():
+                            self._send_json(403, {"error": "You can only charge clients assigned to your profile."})
+                            return
+                        if appointment_id and not conn.execute(
+                            "SELECT 1 FROM appointments WHERE id = ? AND stylist_id = ? AND client_id = ?",
+                            (appointment_id, user["stylist_id"], client_id),
+                        ).fetchone():
+                            self._send_json(403, {"error": "You can only charge appointments assigned to your profile."})
+                            return
                     tip_ksh = int(body.get("tip_ksh", 0) or 0)
                     tip_stylist_id = body.get("tip_stylist_id", "").strip()
                     if payment_method not in ("M-Pesa", "Card", "Cash"):
@@ -2225,7 +2410,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         line_total = unit_price * qty
                         subtotal_ksh += line_total
 
-                        sid = req_item.get("stylist_id", "") or ""
+                        sid = user["stylist_id"] if user["role"] == "employee" else (req_item.get("stylist_id", "") or "")
                         s_info = stylists_map.get(sid)
                         s_name = s_info["name"] if s_info else ""
                         rate = float(s_info["commission_rate"]) if (s_info and cat_row["kind"] == "service") else (0.10 if s_info else 0.0)
@@ -2248,6 +2433,8 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                     items_subtotal_ksh = subtotal_ksh
                     if tip_ksh > 0:
+                        if user["role"] == "employee":
+                            tip_stylist_id = user["stylist_id"]
                         tip_stylist = stylists_map.get(tip_stylist_id) or next(
                             (
                                 stylists_map.get(item["stylist_id"])
@@ -2318,8 +2505,8 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                     conn.execute(
                         """
-                        INSERT INTO tickets (id, ticket_number, client_id, client_name, appointment_id, subtotal_ksh, discount_ksh, tax_ksh, total_ksh, payment_method, tendered_ksh, change_ksh, status, created_at, business_date)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?)
+                        INSERT INTO tickets (id, ticket_number, client_id, client_name, appointment_id, subtotal_ksh, discount_ksh, tax_ksh, total_ksh, payment_method, transaction_reference, tendered_ksh, change_ksh, status, created_at, business_date)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?)
                         """,
                         (
                             ticket_id,
@@ -2332,6 +2519,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                             tax_ksh,
                             total_ksh,
                             payment_method,
+                            transaction_reference,
                             tendered_ksh,
                             change_ksh,
                             now_iso,
@@ -2587,6 +2775,12 @@ class SalonHandler(BaseHTTPRequestHandler):
                     ).fetchone():
                         self._send_json(400, {"error": "Assign this employee to an active stylist profile."})
                         return
+                    if active and conn.execute(
+                        "SELECT 1 FROM users WHERE role = 'employee' AND active = 1 AND stylist_id = ? AND id != ?",
+                        (stylist_id, employee_id),
+                    ).fetchone():
+                        self._send_json(409, {"error": "That stylist profile is already assigned to another active employee."})
+                        return
                     conn.execute("UPDATE users SET active = ?, stylist_id = ? WHERE id = ?", (active, stylist_id, employee_id))
                     if not active:
                         conn.execute("DELETE FROM sessions WHERE user_id = ?", (employee_id,))
@@ -2603,8 +2797,33 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"employee": _public_user(updated) | {"created_at": updated["created_at"]}})
                     return
 
-                if path.startswith("/api/catalog/") and user["role"] == "employee" and set(body) != {"stock_delta"}:
-                    self._send_json(403, {"error": "Employees can only adjust product stock."})
+                if path.startswith("/api/catalog/") and user["role"] == "employee":
+                    self._send_json(403, {"error": "Employees must report product usage or damage through inventory reports."})
+                    return
+
+                if path.startswith("/api/inventory/reports/"):
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required to manage inventory reports."})
+                        return
+                    report_id = path.rsplit("/", 1)[-1]
+                    report = conn.execute("SELECT * FROM inventory_reports WHERE id = ?", (report_id,)).fetchone()
+                    if not report:
+                        self._send_json(404, {"error": "Inventory report was not found."})
+                        return
+                    status = body.get("status")
+                    if status not in {"open", "resolved"}:
+                        self._send_json(400, {"error": "Choose open or resolved report status."})
+                        return
+                    resolved_at = datetime.datetime.now().isoformat(timespec="seconds") if status == "resolved" else ""
+                    resolved_by = user["id"] if status == "resolved" else ""
+                    conn.execute(
+                        "UPDATE inventory_reports SET status = ?, resolved_by_user_id = ?, resolved_at = ? WHERE id = ?",
+                        (status, resolved_by, resolved_at, report_id),
+                    )
+                    _record_audit_event(conn, user, "update", "inventory_report", f"Inventory report marked {status}.", report_id)
+                    conn.commit()
+                    updated = conn.execute("SELECT r.*, c.stock_qty FROM inventory_reports r JOIN catalog_items c ON c.id = r.catalog_item_id WHERE r.id = ?", (report_id,)).fetchone()
+                    self._send_json(200, {"report": dict(updated)})
                     return
 
                 if path.startswith("/api/tasks/"):
@@ -2645,9 +2864,20 @@ class SalonHandler(BaseHTTPRequestHandler):
                     if not existing:
                         self._send_json(404, {"error": "Appointment not found."})
                         return
-                    if user["role"] == "employee" and user["stylist_id"] and existing["stylist_id"] != user["stylist_id"]:
+                    if user["role"] == "employee" and (not user["stylist_id"] or existing["stylist_id"] != user["stylist_id"]):
                         self._send_json(403, {"error": "You can only update appointments assigned to you."})
                         return
+
+                    if user["role"] == "employee":
+                        if set(body) != {"status"}:
+                            self._send_json(403, {"error": "Employees can only update service status."})
+                            return
+                        allowed_transition = (
+                            existing["status"] in {"Pending", "Confirmed"} and body.get("status") == "In-Service"
+                        ) or (existing["status"] == "In-Service" and body.get("status") == "Completed")
+                        if not allowed_transition:
+                            self._send_json(400, {"error": "This appointment status cannot be changed from its current state."})
+                            return
 
                     new_stylist = body.get("stylist_id", existing["stylist_id"])
                     new_date = body.get("date", existing["date"])
@@ -2701,6 +2931,9 @@ class SalonHandler(BaseHTTPRequestHandler):
                     return
 
                 if path.startswith("/api/clients/"):
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required to edit client profiles."})
+                        return
                     cli_id = path.split("/")[-1]
                     existing = conn.execute("SELECT * FROM clients WHERE id = ?", (cli_id,)).fetchone()
                     if not existing:
@@ -2800,13 +3033,13 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(401, {"error": "Sign in to continue."})
                     return
                 if path.startswith("/api/appointments/"):
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Only administrators can delete appointments."})
+                        return
                     apt_id = path.split("/")[-1]
                     existing = conn.execute("SELECT stylist_id FROM appointments WHERE id = ?", (apt_id,)).fetchone()
                     if not existing:
                         self._send_json(404, {"error": "Appointment not found."})
-                        return
-                    if user["role"] == "employee" and user["stylist_id"] and existing["stylist_id"] != user["stylist_id"]:
-                        self._send_json(403, {"error": "You can only cancel appointments assigned to you."})
                         return
                     conn.execute("DELETE FROM appointments WHERE id = ?", (apt_id,))
                     _record_audit_event(conn, user, "delete", "appointment", "Appointment cancelled.", apt_id)

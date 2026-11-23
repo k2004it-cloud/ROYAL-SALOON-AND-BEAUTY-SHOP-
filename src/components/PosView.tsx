@@ -39,6 +39,7 @@ interface PosViewProps {
     client_name: string;
     appointment_id?: string;
     payment_method: PaymentMethod;
+    transaction_reference: string;
     tip_ksh: number;
     tip_stylist_id: string;
     discount_type: 'none' | 'percent' | 'fixed';
@@ -83,6 +84,7 @@ export function PosView({
   const [tipInput, setTipInput] = useState<string>('0');
   const [tipStylistId, setTipStylistId] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('M-Pesa');
+  const [transactionReference, setTransactionReference] = useState('');
   const [tenderInput, setTenderInput] = useState<string>('');
   const [showNumpad, setShowNumpad] = useState<boolean>(false);
   const [settling, setSettling] = useState<boolean>(false);
@@ -145,6 +147,7 @@ export function PosView({
         client_name: selectedClient ? selectedClient.name : 'Walk-In Guest',
         appointment_id: linkedAppointmentId || undefined,
         payment_method: paymentMethod,
+        transaction_reference: transactionReference.trim(),
         tip_ksh: tipKsh,
         tip_stylist_id: tipStylistId || cart.find((line) => line.kind === 'service')?.stylist_id || '',
         discount_type: discountType,
@@ -163,6 +166,7 @@ export function PosView({
       setTipInput('0');
       setTipStylistId('');
       setTenderInput('');
+      setTransactionReference('');
       setShowNumpad(false);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Unable to settle ticket.');
@@ -288,7 +292,7 @@ export function PosView({
             {cart.length > 0 && (
               <button
                 type="button"
-                onClick={onClearCart}
+                onClick={() => { onClearCart(); setTransactionReference(''); }}
                 className="h-9 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white"
               >
                 Clear
@@ -495,6 +499,8 @@ export function PosView({
             })}
           </div>
 
+          <label className="block text-xs font-semibold text-[#344054]">Transaction reference <span className="font-normal text-[#98A2B3]">(optional)</span><input value={transactionReference} onChange={(event) => setTransactionReference(event.target.value)} maxLength={100} className="salon-input mt-1 w-full px-3 text-sm" placeholder={paymentMethod === 'M-Pesa' ? 'M-Pesa receipt code' : 'Card or payment reference'} /></label>
+
           {/* Cash Touch Tiles & NumPad */}
           {paymentMethod === 'Cash' && (
             <div className="space-y-2.5 bg-white p-3 rounded-xl border border-[#E1E7F0]">
@@ -658,6 +664,8 @@ export function PosView({
                   {receiptTicket.client_name}
                 </span>
               </div>
+              <div className="flex justify-between"><span className="text-[#667085]">Payment status</span><span className="font-semibold text-emerald-700">{receiptTicket.status}</span></div>
+              {receiptTicket.transaction_reference && <div className="flex justify-between gap-3"><span className="text-[#667085]">Reference</span><span className="break-all text-right font-semibold text-[#14213D]">{receiptTicket.transaction_reference}</span></div>}
               <div className="space-y-1.5 pt-2">
                 {receiptTicket.items.map((it) => (
                   <div key={it.id} className="flex justify-between gap-2">

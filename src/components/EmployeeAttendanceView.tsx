@@ -14,7 +14,15 @@ function workedHours(record: AttendanceRecord, now: number): string {
   return ((ended - started) / 3600000).toFixed(2) + ' h';
 }
 
-export function EmployeeAttendanceView() {
+function lateMinutes(record: AttendanceRecord | undefined, openingTime: string): number {
+  if (!record) return 0;
+  const clockIn = new Date(record.clock_in);
+  if (!Number.isFinite(clockIn.getTime())) return 0;
+  const [hour, minute] = openingTime.split(':').map(Number);
+  return Math.max(0, clockIn.getHours() * 60 + clockIn.getMinutes() - (hour * 60 + minute));
+}
+
+export function EmployeeAttendanceView({ openingTime = '09:00' }: { openingTime?: string }) {
   const today = todayIsoDate();
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [now, setNow] = useState(Date.now());
@@ -49,6 +57,7 @@ export function EmployeeAttendanceView() {
   const isClockedIn = Boolean(todayRecord && !todayRecord.clock_out);
   const completedDays = useMemo(() => records.filter((record) => record.clock_out), [records]);
   const totalHours = completedDays.reduce((total, record) => total + (new Date(record.clock_out).getTime() - new Date(record.clock_in).getTime()) / 3600000, 0);
+  const todayLateBy = lateMinutes(todayRecord, openingTime);
 
   const recordTime = async (action: 'in' | 'out') => {
     setBusy(true);
@@ -74,7 +83,7 @@ export function EmployeeAttendanceView() {
         <p className="mt-2 text-sm text-[#E6F0FF]">Record your start and finish times for each workday.</p>
       </section>
       <section className="grid gap-3 sm:grid-cols-3">
-        <article className="salon-card rounded-2xl p-5"><p className="text-xs font-bold uppercase text-[#64748B]">Today</p><p className="mt-2 text-lg font-extrabold text-[#14213D]">{todayRecord ? (isClockedIn ? 'Clocked in' : 'Shift complete') : 'Not clocked in'}</p></article>
+        <article className="salon-card rounded-2xl p-5"><p className="text-xs font-bold uppercase text-[#64748B]">Today</p><p className="mt-2 text-lg font-extrabold text-[#14213D]">{todayRecord ? (isClockedIn ? 'Clocked in' : 'Shift complete') : 'Not clocked in'}</p><p className={'mt-1 text-xs font-semibold ' + (todayLateBy ? 'text-amber-700' : 'text-emerald-700')}>{todayRecord ? (todayLateBy ? `Late ${todayLateBy} minutes` : 'On time') : `Shift starts at ${openingTime}`}</p></article>
         <article className="salon-card rounded-2xl p-5"><p className="text-xs font-bold uppercase text-[#64748B]">Start time</p><p className="mt-2 text-lg font-extrabold text-[#14213D]">{localTime(todayRecord?.clock_in ?? '')}</p></article>
         <article className="salon-card rounded-2xl p-5"><p className="text-xs font-bold uppercase text-[#64748B]">Completed hours (30 days)</p><p className="mt-2 text-lg font-extrabold text-[#14213D]">{totalHours.toFixed(2)} h</p></article>
       </section>
@@ -85,8 +94,8 @@ export function EmployeeAttendanceView() {
       {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{error}</p>}
       {notice && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">{notice}</p>}
       <section className="salon-card overflow-hidden rounded-2xl">
-        <div className="flex items-center gap-2 border-b border-[#E1E7F0] px-5 py-4"><CalendarClock className="h-5 w-5 text-[#0D6EFD]" /><div><h2 className="text-lg font-bold text-[#14213D]">Last 30 days</h2><p className="mt-1 text-xs text-[#64748B]">Clock records saved to your staff profile.</p></div></div>
-        {records.length ? <div className="divide-y divide-[#E7ECF5]">{records.map((record) => <article key={record.id} className="grid gap-2 px-5 py-4 sm:grid-cols-4 sm:items-center"><span className="text-sm font-bold text-[#14213D]">{new Date(record.work_date + 'T12:00:00').toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}</span><span className="text-xs text-[#475467]">In: {localTime(record.clock_in)}</span><span className="text-xs text-[#475467]">Out: {record.clock_out ? localTime(record.clock_out) : 'In progress'}</span><span className="text-xs font-bold text-[#0B5ED7]">{workedHours(record, now)}</span></article>)}</div> : <p className="px-5 py-8 text-center text-sm text-[#64748B]">No attendance records yet.</p>}
+        <div className="flex items-center gap-2 border-b border-[#E1E7F0] px-5 py-4"><CalendarClock className="h-5 w-5 text-[#0D6EFD]" /><div><h2 className="text-lg font-bold text-[#14213D]">Last 30 days</h2><p className="mt-1 text-xs text-[#64748B]">Late status is based on the salon opening time ({openingTime}).</p></div></div>
+        {records.length ? <div className="divide-y divide-[#E7ECF5]">{records.map((record) => { const lateBy = lateMinutes(record, openingTime); return <article key={record.id} className="grid gap-2 px-5 py-4 sm:grid-cols-5 sm:items-center"><span className="text-sm font-bold text-[#14213D]">{new Date(record.work_date + 'T12:00:00').toLocaleDateString('en-KE', { weekday: 'short', month: 'short', day: 'numeric' })}</span><span className="text-xs text-[#475467]">In: {localTime(record.clock_in)}</span><span className="text-xs text-[#475467]">Out: {record.clock_out ? localTime(record.clock_out) : 'In progress'}</span><span className={'text-xs font-bold ' + (lateBy ? 'text-amber-700' : 'text-emerald-700')}>{lateBy ? `Late ${lateBy} min` : 'On time'}</span><span className="text-xs font-bold text-[#0B5ED7]">{workedHours(record, now)}</span></article>; })}</div> : <p className="px-5 py-8 text-center text-sm text-[#64748B]">No attendance records yet.</p>}
       </section>
     </div>
   );

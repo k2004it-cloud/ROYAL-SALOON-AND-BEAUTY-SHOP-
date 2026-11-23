@@ -12,6 +12,8 @@ import type {
   CommissionPayout,
   DailyRevenuePoint,
   EmployeeEarningsReport,
+  InventoryReport,
+  InventoryReportType,
   PaymentMethod,
   AuthStatus,
   StaffUser,
@@ -152,7 +154,7 @@ export const salonApi = {
     return apiRequest('/api/tasks');
   },
 
-  createTask(payload: { title: string; description: string; assigned_to_user_id: string; due_date: string }): Promise<{ task: StaffTask }> {
+  createTask(payload: { title: string; description: string; assigned_to_user_id: string; priority: StaffTask['priority']; due_date: string }): Promise<{ task: StaffTask }> {
     return apiRequest('/api/tasks', { method: 'POST', body: JSON.stringify(payload) });
   },
 
@@ -313,11 +315,24 @@ export const salonApi = {
     });
   },
 
+  inventoryReports(): Promise<{ reports: InventoryReport[] }> {
+    return apiRequest('/api/inventory/reports');
+  },
+
+  createInventoryReport(payload: { catalog_item_id: string; report_type: InventoryReportType; quantity: number; note: string }): Promise<{ report: InventoryReport; item: CatalogItem }> {
+    return apiRequest('/api/inventory/reports', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  updateInventoryReport(id: string, status: InventoryReport['status']): Promise<{ report: InventoryReport }> {
+    return apiRequest('/api/inventory/reports/' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify({ status }) });
+  },
+
   checkoutTicket(payload: {
     client_id: string;
     client_name: string;
     appointment_id?: string;
     payment_method: PaymentMethod;
+    transaction_reference: string;
     tip_ksh?: number;
     tip_stylist_id?: string;
     discount_type: 'none' | 'percent' | 'fixed';

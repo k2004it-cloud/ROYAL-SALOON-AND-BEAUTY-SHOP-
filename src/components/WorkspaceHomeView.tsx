@@ -1,4 +1,4 @@
-import { ArrowRight, Bell, CalendarDays, ChartNoAxesColumnIncreasing, Check, CircleDollarSign, Clock3, CreditCard, PackageSearch, Send, Sparkles, Star, UsersRound, Zap } from 'lucide-react';
+import { ArrowRight, Bell, CalendarDays, ChartNoAxesColumnIncreasing, Check, CircleDollarSign, ClipboardCheck, Clock3, CreditCard, PackageSearch, Send, Sparkles, Star, UsersRound, Zap } from 'lucide-react';
 import type { Appointment, CatalogItem, EmployeeDashboard, StaffUser, Stylist, WorkspaceTab } from '../types';
 import { formatKsh } from '../api/client';
 import { StatusBadge } from './StatusBadge';
@@ -34,6 +34,7 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
     { label: 'Clients Served', value: (dashboard?.clients_served_week ?? 0) + ' This Week', detail: 'Completed visits', Icon: UsersRound, color: 'from-[#7651E8] to-[#5636C9]' },
     { label: 'Sales Today', value: formatKsh(dashboard?.today_sales_ksh ?? 0), detail: 'My recorded sales', Icon: CircleDollarSign, color: 'from-[#0BB981] to-[#008B62]' },
     { label: 'My Performance', value: performance + '%', detail: completedCount + ' of ' + appointmentCount + ' completed', Icon: Star, color: 'from-[#FFAB08] to-[#F47B0A]' },
+    { label: 'Pending Tasks', value: String(dashboard?.pending_tasks_count ?? 0), detail: (dashboard?.overdue_tasks_count ?? 0) + ' overdue', Icon: ClipboardCheck, color: 'from-[#0DAFC2] to-[#087D9A]' },
   ];
   const actions: Array<{ label: string; tab: WorkspaceTab; Icon: typeof CalendarDays }> = [
     { label: 'View My Appointments', tab: 'my-appointments', Icon: CalendarDays },
@@ -58,6 +59,10 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
       key: 'sales-today', title: 'Sales Recorded', detail: formatKsh(dashboard.today_sales_ksh) + ' attributed to your services today.',
       Icon: CircleDollarSign, color: 'text-emerald-700 bg-emerald-100', tab: 'reports' as WorkspaceTab,
     }] : []),
+    ...((dashboard?.pending_tasks_count ?? 0) > 0 ? [{
+      key: 'tasks', title: 'Task reminder', detail: (dashboard?.overdue_tasks_count ?? 0) > 0 ? `${dashboard?.overdue_tasks_count} task(s) are overdue.` : `You have ${dashboard?.pending_tasks_count} task(s) to complete.`,
+      Icon: ClipboardCheck, color: 'text-violet-700 bg-violet-100', tab: 'tasks' as WorkspaceTab,
+    }] : []),
   ].slice(0, 3);
 
   return (
@@ -77,7 +82,7 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
         </div>
       </section>
 
-      <section aria-label="My work summary" className="grid grid-cols-2 gap-3 xl:grid-cols-4 xl:gap-2">
+      <section aria-label="My work summary" className="grid grid-cols-2 gap-3 xl:grid-cols-5 xl:gap-2">
         {metrics.map(({ label, value, detail, Icon, color }) => (
           <article key={label} className={'relative min-h-28 overflow-hidden rounded-xl bg-gradient-to-br ' + color + ' p-4 text-white shadow-lg xl:min-h-[82px] xl:p-3'}>
             <div className="flex h-full items-center gap-3"><Icon className="h-9 w-9 shrink-0 text-white/95 xl:h-8 xl:w-8" /><div className="min-w-0">

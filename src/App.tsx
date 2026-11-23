@@ -8,6 +8,7 @@ import type {
   CartLine,
   CatalogItem,
   PaymentMethod,
+  InventoryReportType,
   Ticket,
   StaffUser,
   StaffRole,
@@ -30,6 +31,7 @@ import { NotificationsView } from './components/NotificationsView';
 import { AttendanceView } from './components/AttendanceView';
 import { EmployeeAttendanceView } from './components/EmployeeAttendanceView';
 import { TasksView } from './components/TasksView';
+import { InventoryReportsView } from './components/InventoryReportsView';
 import { PayrollView } from './components/PayrollView';
 import { Bell, CalendarDays, ChevronDown, Crown, LogOut, Menu, Search } from 'lucide-react';
 
@@ -501,11 +503,18 @@ export default function App() {
     showToast('Stock adjusted');
   };
 
+  const handleReportInventory = async (payload: { catalog_item_id: string; report_type: InventoryReportType; quantity: number; note: string }) => {
+    await salonApi.createInventoryReport(payload);
+    await refreshData(businessDate);
+    showToast('Inventory report saved and shared with the administrator.');
+  };
+
   const handleCheckout = async (payload: {
     client_id: string;
     client_name: string;
     appointment_id?: string;
     payment_method: PaymentMethod;
+    transaction_reference: string;
     tip_ksh: number;
     tip_stylist_id: string;
     discount_type: 'none' | 'percent' | 'fixed';
@@ -773,12 +782,12 @@ export default function App() {
               onUpdateAppointment={handleUpdateAppointment}
               onOpenPosForClient={handleOpenPosForClient}
               onProfileUpdated={handleProfileUpdated}
-              onAdjustStock={handleAdjustStock}
+              onReportInventory={handleReportInventory}
             />
           )}
-          {activeTab === 'notifications' && <NotificationsView user={authUser} />}
-          {activeTab === 'timesheet' && authUser.role === 'employee' && <EmployeeAttendanceView />}
-          {activeTab === 'attendance' && authUser.role === 'admin' && <AttendanceView />}
+          {activeTab === 'notifications' && <NotificationsView user={authUser} appointments={data.appointments} dashboard={data.employee_dashboard} />}
+          {activeTab === 'timesheet' && authUser.role === 'employee' && <EmployeeAttendanceView openingTime={data.business_settings.opening_time} />}
+          {activeTab === 'attendance' && authUser.role === 'admin' && <AttendanceView openingTime={data.business_settings.opening_time} />}
           {activeTab === 'tasks' && <TasksView user={authUser} />}
           {activeTab === 'payroll' && authUser.role === 'admin' && <PayrollView />}
           {activeTab === 'schedule' && (
@@ -871,13 +880,16 @@ export default function App() {
             />
           )}
           {activeTab === 'inventory' && authUser.role === 'admin' && (
-            <CatalogView
-              key={activeTab}
-              initialTab="product"
-              catalog={data.catalog}
-              onCreateItem={handleCreateCatalogItem}
-              onAdjustStock={handleAdjustStock}
-            />
+            <>
+              <CatalogView
+                key={activeTab}
+                initialTab="product"
+                catalog={data.catalog}
+                onCreateItem={handleCreateCatalogItem}
+                onAdjustStock={handleAdjustStock}
+              />
+              <InventoryReportsView />
+            </>
           )}
           {activeTab === 'reports' && authUser.role === 'admin' && (
             <LedgerView
