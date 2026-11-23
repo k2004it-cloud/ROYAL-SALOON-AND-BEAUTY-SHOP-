@@ -16,7 +16,7 @@ The app also currently manages its own employee and admin login sessions. Supaba
 
 ## Apply the schema
 
-For a new, empty project, open **SQL Editor** in the Supabase dashboard, paste the contents of `migrations/20261119215800_initial_salon_schema.sql`, and run it. The migration is also kept in this repository so it can be applied through Supabase CLI as the deployment workflow is set up.
+For a new, empty project, open **SQL Editor** in the Supabase dashboard, paste the contents of `migrations/20261119215800_initial_salon_schema.sql`, and run it. Or, after signing into the Supabase CLI and linking the project, run `npx supabase db push` from the repository root to apply the versioned migration.
 
 After it succeeds, the public schema should contain the app tables, including `users`, `appointments`, `tickets`, `attendance_records`, `staff_tasks`, and `inventory_reports`.
 
