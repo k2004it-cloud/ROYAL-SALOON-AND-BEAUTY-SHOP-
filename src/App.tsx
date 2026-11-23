@@ -250,6 +250,7 @@ export default function App() {
             current.name === status.user.name &&
             current.username === status.user.username &&
             current.email === status.user.email &&
+            current.phone === status.user.phone &&
             current.stylist_id === status.user.stylist_id &&
             current.role === status.user.role &&
             current.active === status.user.active

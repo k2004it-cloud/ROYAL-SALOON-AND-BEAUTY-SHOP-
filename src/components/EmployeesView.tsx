@@ -16,6 +16,7 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [stylistId, setStylistId] = useState(stylists[0]?.id ?? '');
   const [saving, setSaving] = useState(false);
@@ -53,11 +54,12 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
     setError('');
     setSaving(true);
     try {
-      await salonApi.createEmployee({ name, username, email, password, stylist_id: stylistId });
+      await salonApi.createEmployee({ name, username, email, phone, password, stylist_id: stylistId });
       setModalOpen(false);
       setName('');
       setUsername('');
       setEmail('');
+      setPhone('');
       setPassword('');
       setStylistId(stylists[0]?.id ?? '');
       await loadEmployees();
@@ -151,6 +153,7 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
                   <h2 className="truncate text-sm font-bold text-[#14213D]">{employee.name}</h2>
                   <p className="truncate text-xs font-semibold text-[#0B5ED7]">@{employee.username}</p>
                   <p className="truncate text-xs text-[#64748B]">{employee.email}</p>
+                  <p className="truncate text-xs text-[#64748B]">{employee.phone || 'Phone not added'}</p>
                   <p className="mt-1 text-[10px] font-semibold text-[#475467]">
                     Stylist profile: {stylists.find((stylist) => stylist.id === employee.stylist_id)?.name || 'Not assigned'}
                   </p>
@@ -216,6 +219,10 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
               <div>
                 <label htmlFor="employee-email" className="mb-1.5 block text-xs font-semibold text-[#344054]">Work email</label>
                 <input id="employee-email" type="email" autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} required className="salon-input w-full px-3 text-sm" />
+              </div>
+              <div>
+                <label htmlFor="employee-phone" className="mb-1.5 block text-xs font-semibold text-[#344054]">Phone number</label>
+                <input id="employee-phone" type="tel" autoComplete="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} className="salon-input w-full px-3 text-sm" />
               </div>
               <div>
                 <label htmlFor="employee-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Temporary password (10+ characters)</label>

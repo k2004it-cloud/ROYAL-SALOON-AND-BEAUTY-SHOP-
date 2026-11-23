@@ -1125,7 +1125,7 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                 if path == "/api/employees":
                     employees = conn.execute(
-                        "SELECT id, name, username, email, stylist_id, role, active, created_at FROM users WHERE role = 'employee' ORDER BY name"
+                        "SELECT id, name, username, email, phone, stylist_id, role, active, created_at FROM users WHERE role = 'employee' ORDER BY name"
                     ).fetchall()
                     self._send_json(200, {"employees": [_public_user(row) | {"created_at": row["created_at"]} for row in employees]})
                     return
@@ -1547,8 +1547,13 @@ class SalonHandler(BaseHTTPRequestHandler):
                     name = body.get("name", "").strip()
                     username = body.get("username", "").strip().lower()
                     email = body.get("email", "").strip().lower()
+                    phone = body.get("phone", "")
                     password = body.get("password", "")
                     stylist_id = body.get("stylist_id", "").strip()
+                    if not isinstance(phone, str) or len(phone.strip()) > 40:
+                        self._send_json(400, {"error": "Phone number must be text and 40 characters or fewer."})
+                        return
+                    phone = phone.strip()
                     if not name or not USERNAME_PATTERN.fullmatch(username):
                         self._send_json(400, {"error": "Enter a username with 3-30 letters, numbers, dots, dashes or underscores."})
                         return
@@ -1576,10 +1581,10 @@ class SalonHandler(BaseHTTPRequestHandler):
                     now_iso = datetime.datetime.now().isoformat(timespec="seconds")
                     conn.execute(
                         """
-                        INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, stylist_id, role, active, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'employee', 1, ?)
+                        INSERT INTO users (id, name, username, email, phone, password_salt, password_hash, pin_salt, pin_hash, stylist_id, role, active, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'employee', 1, ?)
                         """,
-                        (employee_id, name, username, email, password_salt, password_digest, pin_salt, pin_digest, stylist_id, now_iso),
+                        (employee_id, name, username, email, phone, password_salt, password_digest, pin_salt, pin_digest, stylist_id, now_iso),
                     )
                     _record_audit_event(conn, user, "create", "employee", "Employee account created.", employee_id)
                     conn.commit()
