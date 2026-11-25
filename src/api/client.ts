@@ -83,7 +83,7 @@ export const salonApi = {
     return apiRequest('/api/employees');
   },
 
-  createEmployee(payload: { name: string; username: string; email: string; phone: string; password: string; stylist_id: string }): Promise<{ employee: StaffUser }> {
+  createEmployee(payload: { name: string; username: string; email: string; phone: string; password: string; stylist_id?: string }): Promise<{ employee: StaffUser }> {
     return apiRequest('/api/employees', { method: 'POST', body: JSON.stringify(payload) });
   },
 

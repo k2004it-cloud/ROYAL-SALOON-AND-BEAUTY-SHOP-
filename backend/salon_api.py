@@ -2309,13 +2309,13 @@ class SalonHandler(BaseHTTPRequestHandler):
                     if len(password) < 10:
                         self._send_json(400, {"error": "Password must be at least 10 characters."})
                         return
-                    if not stylist_id or not conn.execute(
+                    if stylist_id and not conn.execute(
                         "SELECT 1 FROM stylists WHERE id = ? AND active = 1",
                         (stylist_id,),
                     ).fetchone():
                         self._send_json(400, {"error": "Assign this employee to an active stylist profile."})
                         return
-                    if conn.execute(
+                    if stylist_id and conn.execute(
                         "SELECT 1 FROM users WHERE role = 'employee' AND active = 1 AND stylist_id = ?",
                         (stylist_id,),
                     ).fetchone():

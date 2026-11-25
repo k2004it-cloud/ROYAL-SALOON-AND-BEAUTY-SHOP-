@@ -160,13 +160,9 @@ export function AuthView({
             )}
 
             {setupRequired && role === 'employee' ? (
-              <button
-                type="button"
-                onClick={() => onNavigate('/admin/login')}
-                className="mt-6 h-11 rounded-lg bg-[#0B5ED7] px-4 text-sm font-semibold text-white"
-              >
-                Go to Admin setup
-              </button>
+              <p className="mt-6 rounded-lg border border-[#DDE6F1] bg-white px-3 py-2 text-xs text-[#64748B]">
+                Employee sign-in will be available after the administrator completes setup.
+              </p>
             ) : !connectionError ? (
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
                 {setupRequired && (
@@ -268,16 +264,16 @@ export function AuthView({
             >
               Choose workspace
             </a>
-            {!setupRequired && (
+            {!setupRequired && role === 'admin' && (
               <a
-                href={role === 'admin' ? '/employee' : '/admin'}
+                href="/employee"
                 onClick={(event) => {
                   event.preventDefault();
-                  onNavigate(role === 'admin' ? '/employee' : '/admin');
+                  onNavigate('/employee');
                 }}
                 className="text-xs font-semibold text-[#0B5ED7] underline underline-offset-2"
               >
-                {role === 'admin' ? 'Employee login' : 'Admin login'}
+                Employee login
               </a>
             )}
           </div>

@@ -296,7 +296,7 @@ export default function App() {
   }, [authUser?.id, syncWorkspace]);
 
   useEffect(() => {
-    if (!authUser) return;
+    if (!authUser || import.meta.env.PROD) return;
     const events = new EventSource('/api/events');
     const handleWorkspaceUpdate = () => {
       window.dispatchEvent(new Event('salon:workspace-updated'));

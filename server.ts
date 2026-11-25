@@ -41,7 +41,7 @@ function startPythonBackend(): ChildProcess {
   return child;
 }
 
-async function waitForPython(maxWaitMs = 5000): Promise<void> {
+async function waitForPython(maxWaitMs = 20000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     try {

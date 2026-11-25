@@ -18,7 +18,6 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
-  const [stylistId, setStylistId] = useState(stylists[0]?.id ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -54,14 +53,13 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
     setError('');
     setSaving(true);
     try {
-      await salonApi.createEmployee({ name, username, email, phone, password, stylist_id: stylistId });
+      await salonApi.createEmployee({ name, username, email, phone, password });
       setModalOpen(false);
       setName('');
       setUsername('');
       setEmail('');
       setPhone('');
       setPassword('');
-      setStylistId(stylists[0]?.id ?? '');
       await loadEmployees();
       onNotify('Employee account created');
     } catch (err) {
@@ -228,13 +226,7 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
                 <label htmlFor="employee-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Temporary password (10+ characters)</label>
                 <input id="employee-password" type="password" autoComplete="new-password" minLength={10} value={password} onChange={(event) => setPassword(event.target.value)} required className="salon-input w-full px-3 text-sm" />
               </div>
-              <div>
-                <label htmlFor="employee-stylist" className="mb-1.5 block text-xs font-semibold text-[#344054]">Assign stylist profile</label>
-                <select id="employee-stylist" value={stylistId} onChange={(event) => setStylistId(event.target.value)} required className="salon-input w-full px-3 text-sm">
-                  <option value="" disabled>Select an active stylist</option>
-                  {stylists.map((stylist) => <option key={stylist.id} value={stylist.id}>{stylist.name} · {stylist.role}</option>)}
-                </select>
-              </div>
+              <p className="text-xs text-[#667085]">You can assign a stylist profile to this account from the employee list after it is created.</p>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)} className="h-11 rounded-lg border border-[#E1E7F0] px-4 text-sm font-semibold text-[#14213D]">
                   Cancel
