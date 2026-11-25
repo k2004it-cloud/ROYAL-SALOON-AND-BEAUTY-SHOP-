@@ -7,6 +7,7 @@ client formula records, stylist commissions, and CSV ledger export.
 
 import csv
 import datetime
+from email.message import EmailMessage
 import hashlib
 import hmac
 import io
@@ -14,6 +15,8 @@ import json
 import os
 import re
 import secrets
+import smtplib
+import ssl
 import sqlite3
 import sys
 import threading
@@ -21,7 +24,7 @@ import time
 import uuid
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlsplit, urlunsplit
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("SALON_DB_PATH", os.path.join(BASE_DIR, "salon_pro.db"))
@@ -62,6 +65,10 @@ class PostgresCursor:
             params = tuple(int(value) if isinstance(value, bool) else value for value in params)
         self.cursor.execute(prepared, params or None)
         return self
+
+    @property
+    def rowcount(self):
+        return self.cursor.rowcount
 
     def fetchone(self):
         row = self.cursor.fetchone()
@@ -239,6 +246,15 @@ def init_db() -> None:
                 attempts INTEGER NOT NULL DEFAULT 0,
                 locked_until INTEGER NOT NULL DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                token_hash TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                expires_at INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens(user_id, created_at);
 
             CREATE TABLE IF NOT EXISTS business_settings (
                 id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -556,6 +572,82 @@ def _credential_hash(value: str, salt_hex: str | None = None) -> tuple[str, str]
 def _credential_matches(value: str, salt_hex: str, expected_hash: str) -> bool:
     _, actual_hash = _credential_hash(value, salt_hex)
     return hmac.compare_digest(actual_hash, expected_hash)
+
+
+def _password_reset_config() -> dict[str, str | int] | None:
+    host = os.environ.get("SMTP_HOST", "").strip()
+    username = os.environ.get("SMTP_USERNAME", "").strip()
+    password = os.environ.get("SMTP_PASSWORD", "")
+    sender = os.environ.get("SMTP_FROM_EMAIL", "").strip()
+    try:
+        port = int(os.environ.get("SMTP_PORT", "587"))
+    except ValueError:
+        return None
+
+    public_url = os.environ.get("APP_URL", "").strip().rstrip("/")
+    if not public_url:
+        vercel_domain = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL", "").strip()
+        if vercel_domain:
+            public_url = f"https://{vercel_domain}"
+    parsed_url = urlsplit(public_url)
+    if (
+        not host
+        or not username
+        or not password
+        or not sender
+        or not parsed_url.hostname
+        or parsed_url.scheme not in {"https", "http"}
+        or port < 1
+        or port > 65535
+    ):
+        return None
+    if os.environ.get("NODE_ENV", "").lower() == "production" and parsed_url.scheme != "https":
+        return None
+
+    return {
+        "host": host,
+        "port": port,
+        "username": username,
+        "password": password,
+        "sender": sender,
+        "base_url": urlunsplit((parsed_url.scheme, parsed_url.netloc, "", "", "")),
+    }
+
+
+def _send_password_reset_email(destination: str, reset_url: str, config: dict[str, str | int]) -> None:
+    message = EmailMessage()
+    message["Subject"] = "Reset your Royal Saloon password"
+    message["From"] = str(config["sender"])
+    message["To"] = destination
+    message.set_content(
+        "A password reset was requested for your Royal Saloon account.\n\n"
+        f"Set a new password using this one-time link (valid for 15 minutes):\n{reset_url}\n\n"
+        "If you did not request this, you can ignore this email. Your password will not change."
+    )
+
+    host = str(config["host"])
+    port = int(config["port"])
+    context = ssl.create_default_context()
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=10, context=context) as smtp:
+            smtp.login(str(config["username"]), str(config["password"]))
+            smtp.send_message(message)
+    else:
+        with smtplib.SMTP(host, port, timeout=10) as smtp:
+            smtp.ehlo()
+            smtp.starttls(context=context)
+            smtp.ehlo()
+            smtp.login(str(config["username"]), str(config["password"]))
+            smtp.send_message(message)
+
+
+def _password_reset_table_ready(conn) -> bool:
+    try:
+        conn.execute("SELECT 1 FROM password_reset_tokens LIMIT 0")
+        return True
+    except Exception:
+        conn.rollback()
+        return False
 
 
 def _ensure_demo_users(conn: sqlite3.Connection) -> None:
@@ -1806,6 +1898,166 @@ class SalonHandler(BaseHTTPRequestHandler):
             finally:
                 conn.close()
 
+    def _handle_password_reset_request(self, body: dict) -> None:
+        generic_message = "If an active account uses that email, a password reset link will be sent shortly."
+        config = _password_reset_config()
+        if not config:
+            self._send_json(503, {"error": "Password reset email is not configured. Contact the salon administrator."})
+            return
+
+        email_value = body.get("email", "")
+        email = email_value.strip().lower() if isinstance(email_value, str) else ""
+        if not email or len(email) > 254 or "@" not in email:
+            self._send_json(200, {"message": generic_message})
+            return
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        now_epoch = int(now.timestamp())
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        destination = ""
+        role = ""
+        created = False
+        remote_ip = self.headers.get("X-Real-IP", "").strip()
+        if not remote_ip:
+            remote_ip = self.client_address[0] if self.client_address else "unknown"
+        reset_ip_key = hashlib.sha256(f"password-reset-ip:{remote_ip}".encode("utf-8")).hexdigest()
+        rate_limited = False
+
+        with DB_LOCK:
+            conn = get_conn()
+            try:
+                if not _password_reset_table_ready(conn):
+                    self._send_json(503, {"error": "Password recovery is not ready yet. Please try again later."})
+                    return
+                attempt = conn.execute(
+                    "SELECT attempts, locked_until FROM auth_attempts WHERE account_key = ?",
+                    (reset_ip_key,),
+                ).fetchone()
+                if attempt and attempt["locked_until"] > now_epoch:
+                    rate_limited = True
+                else:
+                    attempts = (attempt["attempts"] if attempt and not attempt["locked_until"] else 0) + 1
+                    locked_until = now_epoch + 900 if attempts >= 3 else 0
+                    conn.execute(
+                        "INSERT INTO auth_attempts (account_key, attempts, locked_until) VALUES (?, ?, ?) "
+                        "ON CONFLICT(account_key) DO UPDATE SET attempts = excluded.attempts, locked_until = excluded.locked_until",
+                        (reset_ip_key, attempts, locked_until),
+                    )
+
+                user = None if rate_limited or not email or len(email) > 254 or "@" not in email else conn.execute(
+                    "SELECT id, email, username, name, role FROM users WHERE lower(email) = ? AND active = 1",
+                    (email,),
+                ).fetchone()
+                if user and not rate_limited:
+                    previous = conn.execute(
+                        "SELECT created_at FROM password_reset_tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+                        (user["id"],),
+                    ).fetchone()
+                    recently_requested = False
+                    if previous:
+                        try:
+                            previous_time = datetime.datetime.fromisoformat(previous["created_at"])
+                            recently_requested = (now - previous_time).total_seconds() < 120
+                        except (TypeError, ValueError):
+                            recently_requested = False
+
+                    if not recently_requested:
+                        conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (user["id"],))
+                        conn.execute(
+                            "INSERT INTO password_reset_tokens (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+                            (
+                                token_hash,
+                                user["id"],
+                                now_epoch + 900,
+                                now.isoformat(timespec="seconds"),
+                            ),
+                        )
+                        conn.commit()
+                        destination = user["email"]
+                        role = user["role"]
+                        created = True
+                conn.commit()
+            finally:
+                conn.close()
+
+        if created:
+            reset_url = f"{config['base_url']}/{role}#{urlencode({'reset_token': token})}"
+            try:
+                _send_password_reset_email(destination, reset_url, config)
+            except (OSError, smtplib.SMTPException, ssl.SSLError) as exc:
+                with DB_LOCK:
+                    conn = get_conn()
+                    try:
+                        conn.execute("DELETE FROM password_reset_tokens WHERE token_hash = ?", (token_hash,))
+                        conn.commit()
+                    finally:
+                        conn.close()
+                print(f"Password reset email delivery failed ({exc.__class__.__name__}).")
+                self._send_json(503, {"error": "Password reset email could not be sent. Try again later or contact the salon administrator."})
+                return
+
+        self._send_json(200, {"message": generic_message})
+
+    def _handle_password_reset_confirm(self, body: dict) -> None:
+        token = body.get("token", "")
+        new_password = body.get("new_password", "")
+        if not isinstance(token, str) or not token or not isinstance(new_password, str):
+            self._send_json(400, {"error": "This reset link is invalid or expired. Request a new one."})
+            return
+        if len(new_password) < 10 or len(new_password) > 128:
+            self._send_json(400, {"error": "Password must be between 10 and 128 characters."})
+            return
+
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        now_epoch = int(time.time())
+        with DB_LOCK:
+            conn = get_conn()
+            try:
+                if not _password_reset_table_ready(conn):
+                    self._send_json(503, {"error": "Password recovery is not ready yet. Please try again later."})
+                    return
+                reset = conn.execute(
+                    "SELECT user_id FROM password_reset_tokens WHERE token_hash = ? AND expires_at > ?",
+                    (token_hash, now_epoch),
+                ).fetchone()
+                if not reset:
+                    self._send_json(400, {"error": "This reset link is invalid or expired. Request a new one."})
+                    return
+
+                consumed = conn.execute(
+                    "DELETE FROM password_reset_tokens WHERE token_hash = ? AND expires_at > ?",
+                    (token_hash, now_epoch),
+                ).rowcount
+                if consumed != 1:
+                    self._send_json(400, {"error": "This reset link is invalid or expired. Request a new one."})
+                    return
+
+                user = conn.execute(
+                    "SELECT * FROM users WHERE id = ? AND active = 1",
+                    (reset["user_id"],),
+                ).fetchone()
+                if not user:
+                    conn.execute("DELETE FROM password_reset_tokens WHERE token_hash = ?", (token_hash,))
+                    conn.commit()
+                    self._send_json(400, {"error": "This reset link is invalid or expired. Request a new one."})
+                    return
+
+                password_salt, password_digest = _credential_hash(new_password)
+                conn.execute(
+                    "UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?",
+                    (password_salt, password_digest, user["id"]),
+                )
+                conn.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
+                conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (user["id"],))
+                account_key = hashlib.sha256(user["username"].strip().lower().encode("utf-8")).hexdigest()
+                conn.execute("DELETE FROM auth_attempts WHERE account_key = ?", (account_key,))
+                _record_audit_event(conn, user, "password_reset", "account", "Password reset using verified email.")
+                conn.commit()
+                self._send_json(200, {"reset": True})
+            finally:
+                conn.close()
+
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
@@ -1814,6 +2066,21 @@ class SalonHandler(BaseHTTPRequestHandler):
             body = self._read_json()
         except Exception:
             self._send_json(400, {"error": "Invalid JSON payload"})
+            return
+
+        if path == "/api/auth/password-reset/request":
+            try:
+                self._handle_password_reset_request(body)
+            except Exception as exc:
+                print(f"Password reset request failed ({exc.__class__.__name__}).")
+                self._send_json(500, {"error": "Password reset service is temporarily unavailable."})
+            return
+        if path == "/api/auth/password-reset/confirm":
+            try:
+                self._handle_password_reset_confirm(body)
+            except Exception as exc:
+                print(f"Password reset confirmation failed ({exc.__class__.__name__}).")
+                self._send_json(500, {"error": "Password reset service is temporarily unavailable."})
             return
 
         with DB_LOCK:

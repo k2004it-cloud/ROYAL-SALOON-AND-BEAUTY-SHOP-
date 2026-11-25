@@ -75,6 +75,14 @@ export const salonApi = {
     return apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
   },
 
+  requestPasswordReset(payload: { email: string }): Promise<{ message: string }> {
+    return apiRequest('/api/auth/password-reset/request', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  confirmPasswordReset(payload: { token: string; new_password: string }): Promise<{ reset: boolean }> {
+    return apiRequest('/api/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
   logout(): Promise<{ logged_out: boolean }> {
     return apiRequest('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
   },

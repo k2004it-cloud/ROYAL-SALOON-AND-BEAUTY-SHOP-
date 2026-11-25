@@ -8,7 +8,7 @@ The Python API supports both PostgreSQL and SQLite. It uses SQLite for local dev
 
 For Vercel, `api/index.py` adapts the existing API routes to a FastAPI function. Vercel serves the Vite build and sends `/api/*` requests to that function. The local Express/Python server remains available for development.
 
-The app also currently manages its own employee and admin login sessions. Supabase Auth is not connected to that login flow.
+The app manages employee and admin login itself; Supabase Auth is not connected to that login flow. Password recovery uses a one-time email link. The raw reset token is never stored, links expire after 15 minutes, and a completed reset invalidates all active sessions for that account.
 
 ## Create the Supabase project
 
@@ -45,6 +45,10 @@ When PostgreSQL is first enabled, it will use the Supabase tables and will not c
 1. Push the repository to a Git provider and import it as a Vercel project. Keep the project root set to the repository root; `vercel.json` configures the Vite build, static output, API function, and SPA routes. Vercel installs the Python function dependencies from the root `requirements.txt`.
 2. In Vercel project settings, add `SALON_DATABASE_URL` as a server-side environment variable for Production. Use the Supabase **Session pooler** URI on port `5432`, with `sslmode=require`. Do not prefix it with `VITE_`.
 3. Deploy. Vercel builds the frontend and runs the Python API as a function. The Supabase migrations must be applied before deployment. The repository's migrations were up to date when this setup was added.
-4. After deployment, verify the `/api/health` endpoint reports `python-postgresql`, then sign in and confirm admin and employee access separately.
+4. In Vercel Production environment variables, configure the SMTP provider: `SMTP_HOST`, `SMTP_PORT` (`587` for STARTTLS or `465` for implicit TLS), `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM_EMAIL`. Set `APP_URL` to the HTTPS production origin, such as `https://your-domain.vercel.app`. Use a sender address authorized by your email provider. Keep all SMTP values server-side.
+5. Deploy. Vercel builds the frontend and runs the Python API as a function. Apply the versioned Supabase migrations before deployment.
+6. After deployment, verify `/api/health` reports `python-postgresql`, sign in with admin and employee accounts, and test password recovery with an account email you can access.
 
 Do not add `.env` to the repository. Use Vercel's environment variable settings for the production connection string. The Vercel API adapter refuses to start if `SALON_DATABASE_URL` is missing, so it cannot silently fall back to SQLite.
+
+Password reset endpoints are unavailable until SMTP and `APP_URL` are configured. The request endpoint returns the same message whether or not an active account matches the submitted email. It limits repeat requests for an account, stores only a SHA-256 hash of each random reset token, expires tokens after 15 minutes, and consumes all outstanding tokens after a successful reset.

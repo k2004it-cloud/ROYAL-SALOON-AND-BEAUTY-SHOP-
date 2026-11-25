@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, Crown, LockKeyhole, RefreshCw } from 'lucide-react';
+import { salonApi } from '../api/client';
 import type { StaffRole } from '../types';
 
 interface AuthViewProps {
@@ -31,6 +32,15 @@ export function AuthView({
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const initialResetToken = new URLSearchParams(window.location.hash.slice(1)).get('reset_token') ?? '';
+  const [recoveryMode, setRecoveryMode] = useState<'login' | 'request' | 'reset'>(initialResetToken ? 'reset' : 'login');
+  const [resetToken, setResetToken] = useState(initialResetToken);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryError, setRecoveryError] = useState('');
+  const [recoveryMessage, setRecoveryMessage] = useState('');
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -39,6 +49,45 @@ export function AuthView({
       onSetup({ name, username, email, password });
     } else {
       onLogin({ username, password, role });
+    }
+  };
+
+  const handleRequestReset = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setRecoveryBusy(true);
+    setRecoveryError('');
+    setRecoveryMessage('');
+    try {
+      const result = await salonApi.requestPasswordReset({ email: recoveryEmail });
+      setRecoveryMessage(result.message);
+    } catch (requestError) {
+      setRecoveryError(requestError instanceof Error ? requestError.message : 'Could not request a password reset.');
+    } finally {
+      setRecoveryBusy(false);
+    }
+  };
+
+  const handleConfirmReset = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setRecoveryError('');
+    setRecoveryMessage('');
+    if (newPassword !== confirmPassword) {
+      setRecoveryError('The new passwords do not match.');
+      return;
+    }
+    setRecoveryBusy(true);
+    try {
+      await salonApi.confirmPasswordReset({ token: resetToken, new_password: newPassword });
+      window.history.replaceState({}, '', window.location.pathname);
+      setResetToken('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setRecoveryMode('login');
+      setRecoveryMessage('Password reset. Sign in with your new password.');
+    } catch (requestError) {
+      setRecoveryError(requestError instanceof Error ? requestError.message : 'This reset link is invalid or expired.');
+    } finally {
+      setRecoveryBusy(false);
     }
   };
 
@@ -130,10 +179,20 @@ export function AuthView({
         ) : (
           <>
             <h1 className="font-serif-editorial text-2xl font-semibold text-[#14213D]">
-              {setupRequired && role === 'admin' ? 'Set up the Owner / Admin account' : `${roleLabel} sign in`}
+              {recoveryMode === 'request'
+                ? 'Reset your password'
+                : recoveryMode === 'reset'
+                  ? 'Choose a new password'
+                  : setupRequired && role === 'admin'
+                    ? 'Set up the Owner / Admin account'
+                    : `${roleLabel} sign in`}
             </h1>
             <p className="mt-1 text-sm text-[#64748B]">
-              {setupRequired && role === 'admin'
+              {recoveryMode === 'request'
+                ? 'Enter the email address on your staff account. If it matches an active account, we will send a reset link.'
+                : recoveryMode === 'reset'
+                  ? 'Choose a new password with at least 10 characters.'
+                  : setupRequired && role === 'admin'
                 ? 'Create the first Admin account. You can add Employee accounts afterward.'
                 : setupRequired
                   ? 'The Owner / Admin account must be set up before Employees can sign in.'
@@ -153,13 +212,47 @@ export function AuthView({
                 )}
               </p>
             )}
-            {error && (
+            {(recoveryError || (recoveryMode === 'login' ? error : '')) && (
               <div role="alert" className="mt-4 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-xs font-semibold text-[#B91C1C]">
-                {error}
+                {recoveryError || error}
               </div>
             )}
 
-            {setupRequired && role === 'employee' ? (
+            {recoveryMessage && (
+              <div role="status" className="mt-4 rounded-lg border border-[#DDE6F1] bg-white px-3 py-2 text-xs text-[#344054]">
+                {recoveryMessage}
+              </div>
+            )}
+
+            {recoveryMode === 'request' ? (
+              <form onSubmit={handleRequestReset} className="mt-6 space-y-4">
+                <div>
+                  <label htmlFor="recovery-email" className="mb-1.5 block text-xs font-semibold text-[#344054]">Account email</label>
+                  <input id="recovery-email" type="email" autoComplete="email" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} required maxLength={254} className="salon-input w-full px-3 text-sm text-[#14213D]" />
+                </div>
+                <button type="submit" disabled={recoveryBusy} className="h-12 w-full rounded-xl bg-gradient-to-r from-[#0D6EFD] to-[#0B5ED7] text-sm font-bold text-white disabled:opacity-60">
+                  {recoveryBusy ? 'Sending…' : 'Send reset link'}
+                </button>
+                <button type="button" onClick={() => { setRecoveryMode('login'); setRecoveryError(''); setRecoveryMessage(''); }} className="w-full text-center text-xs font-semibold text-[#0B5ED7] underline underline-offset-2">
+                  Back to sign in
+                </button>
+              </form>
+            ) : recoveryMode === 'reset' ? (
+              <form onSubmit={handleConfirmReset} className="mt-6 space-y-4">
+                <div>
+                  <label htmlFor="new-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">New password</label>
+                  <input id="new-password" type="password" autoComplete="new-password" minLength={10} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required className="salon-input w-full px-3 text-sm text-[#14213D]" />
+                </div>
+                <div>
+                  <label htmlFor="confirm-new-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Confirm new password</label>
+                  <input id="confirm-new-password" type="password" autoComplete="new-password" minLength={10} maxLength={128} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required className="salon-input w-full px-3 text-sm text-[#14213D]" />
+                </div>
+                <button type="submit" disabled={recoveryBusy || !resetToken} className="h-12 w-full rounded-xl bg-gradient-to-r from-[#0D6EFD] to-[#0B5ED7] text-sm font-bold text-white disabled:opacity-60">
+                  {recoveryBusy ? 'Updating…' : 'Set new password'}
+                </button>
+                {!resetToken && <p className="text-xs text-[#B91C1C]">This reset link is missing its token. Request a new link.</p>}
+              </form>
+            ) : setupRequired && role === 'employee' ? (
               <p className="mt-6 rounded-lg border border-[#DDE6F1] bg-white px-3 py-2 text-xs text-[#64748B]">
                 Employee sign-in will be available after the administrator completes setup.
               </p>
@@ -238,6 +331,11 @@ export function AuthView({
                 >
                   {busy ? 'Please wait…' : setupRequired ? 'Create Admin Account' : `Sign in to ${roleLabel} workspace`}
                 </button>
+                {!setupRequired && !demoMode && (
+                  <button type="button" onClick={() => { setRecoveryMode('request'); setRecoveryError(''); setRecoveryMessage(''); }} className="w-full text-center text-xs font-semibold text-[#0B5ED7] underline underline-offset-2">
+                    Forgot password?
+                  </button>
+                )}
               </form>
             ) : (
               <button
