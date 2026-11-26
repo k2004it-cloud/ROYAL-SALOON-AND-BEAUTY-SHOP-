@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import { salonApi } from '../api/client';
 import type { StaffRole } from '../types';
+import { BrandFooter } from './BrandFooter';
 
 interface AuthViewProps {
   role: StaffRole | null;
@@ -99,7 +100,7 @@ export function AuthView({
   const roleLabel = role === 'superadmin' ? 'Superadmin' : role === 'admin' ? 'Admin' : 'Employee';
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-transparent p-4">
+    <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-transparent p-4">
       <section className="salon-card w-full max-w-xl rounded-3xl p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <img src="/royal-salon-logo.png" alt="Royal Salon logo" className="h-12 w-12 shrink-0 rounded-xl bg-black object-contain" />
@@ -387,6 +388,7 @@ export function AuthView({
           </div>
         )}
       </section>
+      <BrandFooter className="w-full max-w-xl rounded-xl" />
     </main>
   );
 }

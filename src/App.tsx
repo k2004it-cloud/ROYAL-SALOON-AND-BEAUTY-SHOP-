@@ -38,6 +38,7 @@ import { PayrollView } from './components/PayrollView';
 import { ExpensesView, LoyaltyView } from './components/BusinessTrackingViews';
 import { SuperadminView } from './components/SuperadminView';
 import { TrainingView } from './components/TrainingView';
+import { BrandFooter } from './components/BrandFooter';
 import { Bell, CalendarDays, ChevronDown, Crown, LogOut, Menu, Search } from 'lucide-react';
 
 const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
@@ -620,19 +621,25 @@ export default function App() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-transparent p-6">
-        <div className="salon-card w-full max-w-sm rounded-2xl p-8 text-center">
-          <div className="mx-auto h-10 w-10 rounded-full border-4 border-[#DFE7F1] border-t-[#0B5ED7] animate-spin" />
-          <p className="mt-4 text-sm font-semibold text-[#667085]">Checking staff access…</p>
+      <div className="min-h-screen flex flex-col bg-transparent p-6">
+        <div className="flex flex-1 items-center justify-center">
+          <div className="salon-card w-full max-w-sm rounded-2xl p-8 text-center">
+            <div className="mx-auto h-10 w-10 rounded-full border-4 border-[#DFE7F1] border-t-[#0B5ED7] animate-spin" />
+            <p className="mt-4 text-sm font-semibold text-[#667085]">Checking staff access…</p>
+          </div>
         </div>
+        <BrandFooter className="w-full" />
       </div>
     );
   }
 
   if (authUser && !isRoleSwitchLogin && routeRole !== authUser.role) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-transparent p-6">
-        <p className="text-sm font-semibold text-[#667085]">Opening your workspace…</p>
+      <div className="min-h-screen flex flex-col bg-transparent p-6">
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm font-semibold text-[#667085]">Opening your workspace…</p>
+        </div>
+        <BrandFooter className="w-full" />
       </div>
     );
   }
@@ -660,14 +667,17 @@ export default function App() {
     return (
       <div className="min-h-screen flex bg-transparent">
         <div className="hidden md:block w-[248px] beauty-sidebar shrink-0" />
-        <main className="flex-1 p-6 md:p-10 space-y-6">
-          <div className="h-36 rounded-3xl skeleton-shimmer" />
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-            {[0, 1, 2, 3].map((item) => (
-              <div key={item} className="h-24 rounded-2xl skeleton-shimmer" />
-            ))}
+        <main className="min-h-screen flex flex-1 flex-col p-6 md:p-10">
+          <div className="flex-1 space-y-6">
+            <div className="h-36 rounded-3xl skeleton-shimmer" />
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              {[0, 1, 2, 3].map((item) => (
+                <div key={item} className="h-24 rounded-2xl skeleton-shimmer" />
+              ))}
+            </div>
+            <div className="h-[420px] rounded-2xl skeleton-shimmer" />
           </div>
-          <div className="h-[420px] rounded-2xl skeleton-shimmer" />
+          <BrandFooter className="mt-8" />
         </main>
       </div>
     );
@@ -675,23 +685,26 @@ export default function App() {
 
   if (loadError && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-transparent p-6">
-        <div className="salon-card rounded-2xl max-w-md w-full p-6 text-center space-y-4">
-          <h1 className="font-serif-editorial text-2xl font-semibold text-[#14213D]">
-            Royal Saloon Unavailable
-          </h1>
-          <p className="text-sm text-[#667085]">{loadError}</p>
-          <button
-            type="button"
-            onClick={() => {
-              setLoading(true);
-              void refreshData(businessDate);
-            }}
-            className="h-11 px-5 rounded-lg bg-[#6D28D9] text-white text-sm font-semibold"
-          >
-            Retry Connection
-          </button>
+      <div className="min-h-screen flex flex-col bg-transparent p-6">
+        <div className="flex flex-1 items-center justify-center">
+          <div className="salon-card max-w-md w-full rounded-2xl p-6 text-center space-y-4">
+            <h1 className="font-serif-editorial text-2xl font-semibold text-[#14213D]">
+              Royal Saloon Unavailable
+            </h1>
+            <p className="text-sm text-[#667085]">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                void refreshData(businessDate);
+              }}
+              className="h-11 px-5 rounded-lg bg-[#6D28D9] text-white text-sm font-semibold"
+            >
+              Retry Connection
+            </button>
+          </div>
         </div>
+        <BrandFooter className="w-full" />
       </div>
     );
   }
@@ -719,7 +732,7 @@ export default function App() {
       />
 
       <main className="min-h-screen min-w-0 flex-1 bg-transparent p-3 pb-4 sm:p-4 md:pb-6 lg:p-4">
-        <div className="workspace-content mx-auto max-w-[1440px]">
+        <div className="workspace-content mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[1440px] flex-col">
           {demoMode && (
             <p className="no-print mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900">
               Demo data environment. Do not enter real customer information.
@@ -967,6 +980,8 @@ export default function App() {
               onBusinessSettingsSaved={handleBusinessSettingsSaved}
             />
           )}
+
+          <BrandFooter />
 
         </div>
       </main>
