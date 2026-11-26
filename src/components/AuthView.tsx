@@ -100,8 +100,9 @@ export function AuthView({
   const roleLabel = role === 'superadmin' ? 'Superadmin' : role === 'admin' ? 'Admin' : 'Employee';
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-4 bg-transparent p-4">
-      <section className="salon-card w-full max-w-xl rounded-3xl p-6 sm:p-8">
+    <main className="auth-page min-h-screen flex flex-col items-center bg-transparent p-4 sm:p-6">
+      <div className="flex w-full flex-1 items-center justify-center">
+      <section className="salon-card w-full max-w-[760px] rounded-[22px] p-5 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <img src="/royal-salon-logo.png" alt="Royal Salon logo" className="h-12 w-12 shrink-0 rounded-xl bg-black object-contain" />
           <div>
@@ -338,7 +339,7 @@ export function AuthView({
                 <button
                   type="submit"
                   disabled={busy}
-                  className="h-12 w-full rounded-xl bg-gradient-to-r from-[#0D6EFD] to-[#0B5ED7] text-sm font-bold text-white disabled:opacity-60"
+                  className="auth-primary-button h-12 w-full rounded-xl text-sm font-bold disabled:opacity-60"
                 >
                   {busy ? 'Please wait…' : roleSetupRequired ? `Create ${role === 'superadmin' ? 'Superadmin' : 'Admin'} Account` : `Sign in to ${roleLabel} workspace`}
                 </button>
@@ -388,7 +389,8 @@ export function AuthView({
           </div>
         )}
       </section>
-      <BrandFooter className="w-full max-w-xl rounded-xl" />
+      </div>
+      <BrandFooter className="w-full max-w-[760px] rounded-xl" />
     </main>
   );
 }
