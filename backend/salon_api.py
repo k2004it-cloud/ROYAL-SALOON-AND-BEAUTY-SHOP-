@@ -534,10 +534,12 @@ def init_db() -> None:
             cur.execute("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
         if "is_superadmin" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN is_superadmin INTEGER NOT NULL DEFAULT 0")
-        if not cur.execute("SELECT 1 FROM users WHERE is_superadmin = 1 LIMIT 1").fetchone():
-            first_admin = cur.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at, id LIMIT 1").fetchone()
-            if first_admin:
-                cur.execute("UPDATE users SET is_superadmin = 1 WHERE id = ?", (first_admin["id"],))
+        cur.execute("CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
+        if not cur.execute("SELECT 1 FROM app_migrations WHERE name = 'separate_superadmin_from_admin'").fetchone():
+            # Remove the legacy first-admin promotion once, while preserving
+            # subsequently token-created Superadmin accounts across restarts.
+            cur.execute("UPDATE users SET is_superadmin = 0 WHERE role = 'admin'")
+            cur.execute("INSERT INTO app_migrations (name, applied_at) VALUES ('separate_superadmin_from_admin', ?)", (datetime.datetime.now().isoformat(timespec="seconds"),))
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_single_superadmin ON users(is_superadmin) WHERE is_superadmin = 1")
 
         used_usernames: set[str] = set()
@@ -695,7 +697,7 @@ def _ensure_demo_users(conn: sqlite3.Connection) -> None:
                 SET name = ?, email = ?, stylist_id = ?, role = ?, is_superadmin = ?, active = 1
                 WHERE username = ?
                 """,
-                (name, email, stylist_id, role, int(role == "admin"), username),
+                (name, email, stylist_id, role, 0, username),
             )
             continue
         password_salt, password_digest = _credential_hash(password)
@@ -716,7 +718,7 @@ def _ensure_demo_users(conn: sqlite3.Connection) -> None:
                 pin_digest,
                 stylist_id,
                 role,
-                int(role == "admin"),
+                0,
                 now_iso,
             ),
         )
@@ -1509,6 +1511,8 @@ class SalonHandler(BaseHTTPRequestHandler):
                         200,
                         {
                             "setup_required": user_count == 0,
+                            "admin_setup_required": conn.execute("SELECT 1 FROM users WHERE role = 'admin' AND active = 1 LIMIT 1").fetchone() is None,
+                            "superadmin_setup_required": conn.execute("SELECT 1 FROM users WHERE is_superadmin = 1 AND active = 1 LIMIT 1").fetchone() is None,
                             "demo_mode": DEMO_MODE,
                             "user": _public_user(user) if user else None,
                         },
@@ -2140,8 +2144,8 @@ class SalonHandler(BaseHTTPRequestHandler):
             conn = get_conn()
             try:
                 if path == "/api/auth/setup":
-                    if conn.execute("SELECT COUNT(*) FROM users").fetchone()[0] != 0:
-                        self._send_json(409, {"error": "Initial administrator setup is already complete."})
+                    if conn.execute("SELECT 1 FROM users WHERE role = 'admin' AND active = 1 LIMIT 1").fetchone():
+                        self._send_json(409, {"error": "Administrator setup is already complete."})
                         return
                     name = body.get("name", "").strip()
                     username = body.get("username", "").strip().lower()
@@ -2169,7 +2173,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                     conn.execute(
                         """
                         INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, role, is_superadmin, active, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin', 0, 1, ?)
                         """,
                         (user_id, name, username, email, password_salt, password_digest, pin_salt, pin_digest, now_iso),
                     )
@@ -2185,6 +2189,38 @@ class SalonHandler(BaseHTTPRequestHandler):
                         {"user": _public_user(created_user), "expires_at": expires_at},
                         {"Set-Cookie": cookie},
                     )
+                    return
+
+                if path == "/api/auth/setup/superadmin":
+                    if conn.execute("SELECT 1 FROM users WHERE is_superadmin = 1 LIMIT 1").fetchone():
+                        self._send_json(409, {"error": "Superadmin setup is already complete."})
+                        return
+                    name = body.get("name", "").strip()
+                    username = body.get("username", "").strip().lower()
+                    email = body.get("email", "").strip().lower()
+                    password = body.get("password", "")
+                    if not name or not USERNAME_PATTERN.fullmatch(username):
+                        self._send_json(400, {"error": "Enter a username with 3-30 letters, numbers, dots, dashes or underscores."})
+                        return
+                    if "@" not in email or len(password) < 10:
+                        self._send_json(400, {"error": "Enter a valid email and a password with at least 10 characters."})
+                        return
+                    if conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)", (username, email)).fetchone():
+                        self._send_json(409, {"error": "That username or email is already in use."})
+                        return
+                    password_salt, password_digest = _credential_hash(password)
+                    pin_salt, pin_digest = _credential_hash(secrets.token_urlsafe(32))
+                    user_id = f"usr-{uuid.uuid4().hex[:12]}"
+                    now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute("INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, role, is_superadmin, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, ?)", (user_id, name, username, email, password_salt, password_digest, pin_salt, pin_digest, now_iso))
+                    conn.execute("UPDATE users SET is_superadmin = 0 WHERE is_superadmin = 1 AND id <> ?", (user_id,))
+                    created_user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+                    token, expires_at = _create_session(conn, user_id)
+                    _record_audit_event(conn, created_user, "create", "superadmin", "Initial Superadmin account created.")
+                    conn.commit()
+                    cookie = f"{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_TTL_SECONDS}"
+                    if self.headers.get("X-Forwarded-Proto") == "https": cookie += "; Secure"
+                    self._send_json(201, {"user": _public_user(created_user), "expires_at": expires_at}, {"Set-Cookie": cookie})
                     return
 
                 if path == "/api/auth/login":

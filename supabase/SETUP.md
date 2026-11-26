@@ -38,7 +38,7 @@ Install the PostgreSQL driver for the local backend with `pip install -r backend
 
 For local development, copy `.env.example` to `.env` and set `SALON_DATABASE_URL` there. `server.ts` loads `.env` and passes the value to the Python API. Keep the database connection string server-side. Do not add it to a `VITE_*` variable, frontend code, or source control. The browser continues to call the app API, which enforces the existing admin and employee permissions.
 
-When PostgreSQL is first enabled, it will use the Supabase tables and will not copy records from `backend/salon_pro.db`. The admin setup screen will be available if no administrator exists in Supabase. Any data transfer from the local SQLite file should be handled as a separate, reviewed import.
+When PostgreSQL is first enabled, it will use the Supabase tables and will not copy records from `backend/salon_pro.db`. The salon Admin and system Superadmin are separate accounts. The Admin setup screen is available if no active Admin exists. The first Superadmin can be created once from `/superadmin`; after that, the route accepts only that account's username and password. Any data transfer from the local SQLite file should be handled as a separate, reviewed import.
 
 ## Deploy on Vercel
 

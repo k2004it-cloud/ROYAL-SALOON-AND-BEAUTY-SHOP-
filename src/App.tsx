@@ -144,6 +144,8 @@ export default function App() {
   const [authUser, setAuthUser] = useState<StaffUser | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [setupRequired, setSetupRequired] = useState(false);
+  const [adminSetupRequired, setAdminSetupRequired] = useState(false);
+  const [superadminSetupRequired, setSuperadminSetupRequired] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authConnectionError, setAuthConnectionError] = useState(false);
@@ -210,6 +212,8 @@ export default function App() {
       const status: AuthStatus = await salonApi.authStatus();
       setAuthUser(status.user);
       setSetupRequired(status.setup_required);
+      setAdminSetupRequired(status.admin_setup_required);
+      setSuperadminSetupRequired(status.superadmin_setup_required);
       setDemoMode(status.demo_mode);
       setAuthConnectionError(false);
     } catch (err) {
@@ -334,15 +338,18 @@ export default function App() {
     username: string;
     email: string;
     password: string;
+    role: 'admin' | 'superadmin';
   }) => {
     setAuthBusy(true);
     setAuthError('');
     try {
-      const response = await salonApi.setupAdmin(payload);
+      const response = payload.role === 'superadmin' ? await salonApi.setupSuperadmin(payload) : await salonApi.setupAdmin(payload);
       setAuthUser(response.user);
       setSetupRequired(false);
+      if (payload.role === 'admin') setAdminSetupRequired(false);
+      if (payload.role === 'superadmin') setSuperadminSetupRequired(false);
       setLoading(true);
-      navigatePath('/admin', true);
+      navigatePath(pathForTab(response.user.role, defaultTabForRole(response.user.role)), true);
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Unable to create administrator account.');
     } finally {
@@ -624,6 +631,8 @@ export default function App() {
       <AuthView
         role={roleFromPath(currentPath)}
         setupRequired={setupRequired}
+        adminSetupRequired={adminSetupRequired}
+        superadminSetupRequired={superadminSetupRequired}
         demoMode={demoMode}
         connectionError={authConnectionError}
         error={authError}

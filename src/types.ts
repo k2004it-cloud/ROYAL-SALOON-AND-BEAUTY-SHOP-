@@ -198,6 +198,8 @@ export interface EmployeeEarningsReport {
 
 export interface AuthStatus {
   setup_required: boolean;
+  admin_setup_required: boolean;
+  superadmin_setup_required: boolean;
   demo_mode: boolean;
   user: StaffUser | null;
 }
