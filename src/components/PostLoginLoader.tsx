@@ -1,19 +1,11 @@
-import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { Brush, Scissors, Sparkles } from 'lucide-react';
 
-type LoadingScene = 'floating' | 'wave';
+const DOT_COLORS = [
+  '#FFC94A', '#FFAD32', '#FFE38A', '#FFD15B',
+  '#F5A623', '#FFF0B5', '#FFC13D', '#FFE7A1',
+];
 
 export function PostLoginLoader() {
-  const [scene, setScene] = useState<LoadingScene>('floating');
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setScene((current) => current === 'floating' ? 'wave' : 'floating');
-    }, 1250);
-    return () => window.clearInterval(interval);
-  }, []);
-
   return (
     <main className="post-login-loader" role="status" aria-live="polite" aria-label="Loading your account">
       <section className="post-login-loader__panel">
@@ -24,25 +16,18 @@ export function PostLoginLoader() {
         />
 
         <div className="post-login-loader__animation" aria-hidden="true">
-          {scene === 'floating' ? (
-            <div className="post-login-loader__icons">
-              <span className="post-login-loader__icon post-login-loader__icon--one"><Brush /></span>
-              <span className="post-login-loader__icon post-login-loader__icon--two"><Scissors /></span>
-              <span className="post-login-loader__icon post-login-loader__icon--three"><Sparkles /></span>
-            </div>
-          ) : (
-            <div className="post-login-loader__dots">
-              {Array.from({ length: 8 }, (_, index) => (
-                <span key={index} style={{ '--dot-index': index } as CSSProperties} />
-              ))}
-            </div>
-          )}
+          <div className="post-login-loader__dots">
+            {DOT_COLORS.map((color, index) => (
+              <span
+                key={color}
+                style={{ '--dot-index': index, '--dot-color': color } as CSSProperties}
+              />
+            ))}
+          </div>
         </div>
 
         <p className="post-login-loader__title">Loading your account...</p>
-        <p className="post-login-loader__caption">
-          {scene === 'floating' ? 'Getting your workspace ready' : 'Almost there'}
-        </p>
+        <p className="post-login-loader__caption">Preparing your workspace</p>
       </section>
     </main>
   );
