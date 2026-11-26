@@ -7,9 +7,10 @@ interface EmployeesViewProps {
   onNotify: (message: string) => void;
   demoMode: boolean;
   stylists: Stylist[];
+  isSuperadmin?: boolean;
 }
 
-export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewProps) {
+export function EmployeesView({ onNotify, demoMode, stylists, isSuperadmin = false }: EmployeesViewProps) {
   const [employees, setEmployees] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -96,7 +97,7 @@ export function EmployeesView({ onNotify, demoMode, stylists }: EmployeesViewPro
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2563EB]">
-            Admin Workspace
+            {isSuperadmin ? 'Superadmin Controls' : 'Admin Workspace'}
           </p>
           <h1 className="font-serif-editorial text-3xl font-semibold tracking-tight text-[#14213D]">
             Employees & Access

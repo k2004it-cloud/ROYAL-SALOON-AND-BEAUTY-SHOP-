@@ -124,6 +124,22 @@ export const salonApi = {
     return apiRequest('/api/employees', { method: 'POST', body: JSON.stringify(payload) });
   },
 
+  listAdminAccounts(): Promise<{ admins: StaffUser[] }> {
+    return apiRequest('/api/superadmin/admins');
+  },
+
+  createAdminAccount(payload: { name: string; username: string; email: string; password: string }): Promise<{ admin: StaffUser }> {
+    return apiRequest('/api/superadmin/admins', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  updateAdminAccount(id: string, active: boolean): Promise<{ admin: StaffUser }> {
+    return apiRequest(`/api/superadmin/admins/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ active }) });
+  },
+
+  resetAdminPassword(id: string): Promise<{ username: string; temporary_password: string }> {
+    return apiRequest(`/api/superadmin/admins/${encodeURIComponent(id)}/reset-password`, { method: 'POST', body: JSON.stringify({}) });
+  },
+
   updateEmployee(id: string, payload: { active?: boolean; stylist_id?: string }): Promise<{ employee: StaffUser }> {
     return apiRequest(`/api/employees/${encodeURIComponent(id)}`, {
       method: 'PATCH',

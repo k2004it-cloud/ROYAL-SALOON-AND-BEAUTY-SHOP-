@@ -1873,6 +1873,16 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"employees": [_public_user(row) | {"created_at": row["created_at"]} for row in employees]})
                     return
 
+                if path == "/api/superadmin/admins":
+                    if not bool(user["is_superadmin"]):
+                        self._send_json(403, {"error": "Superadmin access is required to manage Admin accounts."})
+                        return
+                    admins = conn.execute(
+                        "SELECT * FROM users WHERE role = 'admin' AND is_superadmin = 0 ORDER BY name"
+                    ).fetchall()
+                    self._send_json(200, {"admins": [_public_user(row) | {"created_at": row["created_at"]} for row in admins]})
+                    return
+
                 if path == "/api/bootstrap":
                     stylists = [dict(r) for r in conn.execute("SELECT * FROM stylists WHERE active = 1 ORDER BY name").fetchall()]
                     catalog = [dict(r) for r in conn.execute("SELECT * FROM catalog_items WHERE active = 1 ORDER BY kind, category, name").fetchall()]
@@ -2236,7 +2246,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                     username = body.get("username", "").strip().lower()
                     email = body.get("email", "").strip().lower()
                     password = body.get("password", "")
-                    if not name or not USERNAME_PATTERN.fullmatch(username):
+                    if not name or len(name) > 120 or not USERNAME_PATTERN.fullmatch(username):
                         self._send_json(400, {"error": "Enter a username with 3-30 letters, numbers, dots, dashes or underscores."})
                         return
                     if "@" not in email:
@@ -2287,8 +2297,8 @@ class SalonHandler(BaseHTTPRequestHandler):
                     if not name or not USERNAME_PATTERN.fullmatch(username):
                         self._send_json(400, {"error": "Enter a username with 3-30 letters, numbers, dots, dashes or underscores."})
                         return
-                    if "@" not in email or len(password) < 10:
-                        self._send_json(400, {"error": "Enter a valid email and a password with at least 10 characters."})
+                    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254 or not isinstance(password, str) or len(password) < 10 or len(password) > 128:
+                        self._send_json(400, {"error": "Enter a valid email and a password between 10 and 128 characters."})
                         return
                     if conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)", (username, email)).fetchone():
                         self._send_json(409, {"error": "That username or email is already in use."})
@@ -2783,6 +2793,58 @@ class SalonHandler(BaseHTTPRequestHandler):
                     conn.commit()
                     employee = conn.execute("SELECT * FROM users WHERE id = ?", (employee_id,)).fetchone()
                     self._send_json(201, {"employee": _public_user(employee) | {"created_at": employee["created_at"]}})
+                    return
+
+                if path == "/api/superadmin/admins":
+                    if not bool(user["is_superadmin"]):
+                        self._send_json(403, {"error": "Superadmin access is required to create Admin accounts."})
+                        return
+                    name = body.get("name", "").strip()
+                    username = body.get("username", "").strip().lower()
+                    email = body.get("email", "").strip().lower()
+                    password = body.get("password", "")
+                    if not name or len(name) > 120 or not USERNAME_PATTERN.fullmatch(username):
+                        self._send_json(400, {"error": "Enter a username with 3-30 letters, numbers, dots, dashes or underscores."})
+                        return
+                    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254 or not isinstance(password, str) or len(password) < 10 or len(password) > 128:
+                        self._send_json(400, {"error": "Enter a valid email and a password between 10 and 128 characters."})
+                        return
+                    if conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?)", (username, email)).fetchone():
+                        self._send_json(409, {"error": "That username or email is already in use."})
+                        return
+                    password_salt, password_digest = _credential_hash(password)
+                    pin_salt, pin_digest = _credential_hash(secrets.token_urlsafe(32))
+                    admin_id = f"usr-{uuid.uuid4().hex[:12]}"
+                    now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute(
+                        "INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, role, is_superadmin, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin', 0, 1, ?)",
+                        (admin_id, name, username, email, password_salt, password_digest, pin_salt, pin_digest, now_iso),
+                    )
+                    _record_audit_event(conn, user, "create", "admin_account", "Admin account created by Superadmin.", admin_id)
+                    conn.commit()
+                    admin = conn.execute("SELECT * FROM users WHERE id = ?", (admin_id,)).fetchone()
+                    self._send_json(201, {"admin": _public_user(admin) | {"created_at": admin["created_at"]}})
+                    return
+
+                if path.startswith("/api/superadmin/admins/") and path.endswith("/reset-password"):
+                    if not bool(user["is_superadmin"]):
+                        self._send_json(403, {"error": "Superadmin access is required to reset an Admin password."})
+                        return
+                    admin_id = path.split("/")[-2]
+                    admin = conn.execute("SELECT * FROM users WHERE id = ? AND role = 'admin' AND is_superadmin = 0", (admin_id,)).fetchone()
+                    if not admin:
+                        self._send_json(404, {"error": "Admin account not found."})
+                        return
+                    temporary_password = secrets.token_urlsafe(15)
+                    password_salt, password_digest = _credential_hash(temporary_password)
+                    conn.execute("UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?", (password_salt, password_digest, admin_id))
+                    conn.execute("DELETE FROM sessions WHERE user_id = ?", (admin_id,))
+                    conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (admin_id,))
+                    account_key = hashlib.sha256(admin["username"].strip().lower().encode("utf-8")).hexdigest()
+                    conn.execute("DELETE FROM auth_attempts WHERE account_key = ?", (account_key,))
+                    _record_audit_event(conn, user, "reset_password", "admin_account", f"Temporary password issued for Admin @{admin['username']}; prior sessions revoked.", admin_id)
+                    conn.commit()
+                    self._send_json(200, {"temporary_password": temporary_password, "username": admin["username"]})
                     return
 
                 if path.startswith("/api/tickets/") and path.endswith("/void") and user["role"] != "admin":
@@ -3395,6 +3457,28 @@ class SalonHandler(BaseHTTPRequestHandler):
                     conn.commit()
                     updated = conn.execute("SELECT * FROM support_requests WHERE id = ?", (request_id,)).fetchone()
                     self._send_json(200, {"request": dict(updated)})
+                    return
+
+                if path.startswith("/api/superadmin/admins/"):
+                    if not bool(user["is_superadmin"]):
+                        self._send_json(403, {"error": "Superadmin access is required to manage Admin accounts."})
+                        return
+                    admin_id = path.rsplit("/", 1)[-1]
+                    admin = conn.execute("SELECT * FROM users WHERE id = ? AND role = 'admin' AND is_superadmin = 0", (admin_id,)).fetchone()
+                    if not admin:
+                        self._send_json(404, {"error": "Admin account not found."})
+                        return
+                    if "active" not in body or not isinstance(body["active"], bool):
+                        self._send_json(400, {"error": "Choose whether this Admin account should be active."})
+                        return
+                    active = int(body["active"])
+                    conn.execute("UPDATE users SET active = ? WHERE id = ?", (active, admin_id))
+                    if not active:
+                        conn.execute("DELETE FROM sessions WHERE user_id = ?", (admin_id,))
+                    _record_audit_event(conn, user, "activate" if active else "deactivate", "admin_account", "Admin account enabled by Superadmin." if active else "Admin account disabled by Superadmin.", admin_id)
+                    conn.commit()
+                    updated = conn.execute("SELECT * FROM users WHERE id = ?", (admin_id,)).fetchone()
+                    self._send_json(200, {"admin": _public_user(updated) | {"created_at": updated["created_at"]}})
                     return
 
                 if path.startswith("/api/employees/"):

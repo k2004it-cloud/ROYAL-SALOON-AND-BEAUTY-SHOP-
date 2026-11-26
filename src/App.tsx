@@ -24,6 +24,7 @@ import { CatalogView } from './components/CatalogView';
 import { LedgerView } from './components/LedgerView';
 import { AuthView } from './components/AuthView';
 import { EmployeesView } from './components/EmployeesView';
+import { AdminAccountsView } from './components/AdminAccountsView';
 import { WorkspaceHomeView } from './components/WorkspaceHomeView';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { SystemPages } from './components/SystemPages';
@@ -853,7 +854,10 @@ export default function App() {
           )}
 
           {activeTab === 'employees' && isAdminRole(authUser.role) && (
-            <EmployeesView onNotify={showToast} demoMode={demoMode} stylists={data.stylists} />
+            <div className="space-y-6">
+              {authUser.role === 'superadmin' && <AdminAccountsView onNotify={showToast} />}
+              <EmployeesView onNotify={showToast} demoMode={demoMode} stylists={data.stylists} isSuperadmin={authUser.role === 'superadmin'} />
+            </div>
           )}
 
           {activeTab === 'pos' && (
