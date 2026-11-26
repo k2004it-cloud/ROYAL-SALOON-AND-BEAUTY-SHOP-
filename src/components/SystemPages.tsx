@@ -25,6 +25,7 @@ import type {
 } from '../types';
 import { isAdminRole } from '../types';
 import { salonApi } from '../api/client';
+import { ProfileImagePicker } from './ProfileImagePicker';
 
 type SystemPageTab = Extract<WorkspaceTab, 'settings' | 'system-logs' | 'backups' | 'support'>;
 
@@ -35,6 +36,7 @@ interface SystemPagesProps {
   demoMode: boolean;
   businessSettings: BusinessSettings;
   onBusinessSettingsSaved: (settings: BusinessSettings) => void;
+  onProfileUpdated: (user: StaffUser) => void;
 }
 
 function PageHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
@@ -53,7 +55,8 @@ function SettingsPage({
   demoMode,
   businessSettings,
   onBusinessSettingsSaved,
-}: Pick<SystemPagesProps, 'user' | 'date' | 'demoMode' | 'businessSettings' | 'onBusinessSettingsSaved'>) {
+  onProfileUpdated,
+}: Pick<SystemPagesProps, 'user' | 'date' | 'demoMode' | 'businessSettings' | 'onBusinessSettingsSaved' | 'onProfileUpdated'>) {
   const [settings, setSettings] = useState(businessSettings);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -64,6 +67,12 @@ function SettingsPage({
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordNotice, setPasswordNotice] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? '');
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const [avatarNotice, setAvatarNotice] = useState('');
+
+  useEffect(() => setAvatarUrl(user.avatar_url ?? ''), [user.avatar_url]);
 
   useEffect(() => setSettings(businessSettings), [businessSettings]);
 
@@ -110,6 +119,27 @@ function SettingsPage({
       setPasswordError(error instanceof Error ? error.message : 'Unable to change password.');
     } finally {
       setPasswordBusy(false);
+    }
+  };
+
+  const updateAccountPhoto = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAvatarBusy(true);
+    setAvatarError('');
+    setAvatarNotice('');
+    try {
+      const { user: updatedUser } = await salonApi.updateProfile({
+        name: user.name,
+        email: user.email,
+        phone: user.phone ?? '',
+        avatar_url: avatarUrl,
+      });
+      onProfileUpdated(updatedUser);
+      setAvatarNotice('Account photo saved.');
+    } catch (error) {
+      setAvatarError(error instanceof Error ? error.message : 'Unable to save your account photo.');
+    } finally {
+      setAvatarBusy(false);
     }
   };
 
@@ -162,6 +192,14 @@ function SettingsPage({
             {saving ? 'Saving…' : 'Save business profile'}
           </button>
         </div>
+      </form>
+
+      <form onSubmit={updateAccountPhoto} className="salon-card space-y-4 rounded-2xl p-5 sm:p-6">
+        <div><h2 className="text-sm font-bold text-[#14213D]">Account photo</h2><p className="mt-0.5 text-xs text-[#667085]">Choose how your Admin profile appears in the workspace.</p></div>
+        <ProfileImagePicker name={user.name} value={avatarUrl} onChange={setAvatarUrl} />
+        {avatarError && <p role="alert" className="text-xs font-semibold text-red-700">{avatarError}</p>}
+        {avatarNotice && <p role="status" className="text-xs font-semibold text-green-700">{avatarNotice}</p>}
+        <button type="submit" disabled={avatarBusy} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0D6EFD] px-4 text-xs font-bold text-white disabled:opacity-60">{avatarBusy ? 'Saving photo…' : 'Save account photo'}</button>
       </form>
 
       <form onSubmit={updatePassword} className="salon-card space-y-4 rounded-2xl p-5 sm:p-6">
@@ -484,6 +522,7 @@ export function SystemPages(props: SystemPagesProps) {
         demoMode={props.demoMode}
         businessSettings={props.businessSettings}
         onBusinessSettingsSaved={props.onBusinessSettingsSaved}
+        onProfileUpdated={props.onProfileUpdated}
       />;
     case 'system-logs':
       return <SystemLogPage date={props.date} />;

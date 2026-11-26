@@ -301,6 +301,7 @@ export default function App() {
           current.username === status.user.username &&
           current.email === status.user.email &&
           current.phone === status.user.phone &&
+          current.avatar_url === status.user.avatar_url &&
           current.stylist_id === status.user.stylist_id &&
           current.role === status.user.role &&
           current.active === status.user.active
@@ -792,7 +793,7 @@ export default function App() {
             </button>
             <div className="relative">
               <button type="button" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)} className="flex items-center gap-2 rounded-xl p-1.5 text-left hover:bg-[#F3F6FD]">
-                {profileStylist?.avatar_url ? <img src={profileStylist.avatar_url} alt="" className="h-11 w-11 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8F1FF] text-sm font-bold text-[#0757D8]">{authUser.name.slice(0, 1).toUpperCase()}</span>}
+                {authUser.avatar_url || profileStylist?.avatar_url ? <img src={authUser.avatar_url || profileStylist?.avatar_url} alt="" className="h-11 w-11 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8F1FF] text-sm font-bold text-[#0757D8]">{authUser.name.slice(0, 1).toUpperCase()}</span>}
                 <span className="hidden min-w-0 sm:block"><span className="block max-w-36 truncate text-xs font-bold text-[#14213D]">{authUser.name}</span><span className="block text-[10px] text-[#475467]">{authUser.role === 'employee' ? (profileStylist?.role || 'Stylist') : authUser.role === 'superadmin' ? 'Superadmin' : 'Owner / Admin'}</span></span>
                 <ChevronDown className="hidden h-4 w-4 text-[#071B53] sm:block" />
               </button>
@@ -983,6 +984,7 @@ export default function App() {
               demoMode={demoMode}
               businessSettings={data.business_settings}
               onBusinessSettingsSaved={handleBusinessSettingsSaved}
+              onProfileUpdated={handleProfileUpdated}
             />
           )}
           {activeTab === 'support' && (
@@ -993,6 +995,7 @@ export default function App() {
               demoMode={demoMode}
               businessSettings={data.business_settings}
               onBusinessSettingsSaved={handleBusinessSettingsSaved}
+              onProfileUpdated={handleProfileUpdated}
             />
           )}
 

@@ -113,7 +113,7 @@ export function WorkspaceHomeView({ user, date, appointments, stylists, catalog,
         <article className="salon-card rounded-2xl p-4 xl:p-3">
           <div className="mb-3 flex items-center justify-between xl:mb-2"><h2 className="text-lg font-extrabold text-[#14213D]">My Profile</h2><button type="button" onClick={() => onNavigate('profile')} className="inline-flex items-center gap-1 text-xs font-bold text-[#0B5ED7]">Edit Profile <ArrowRight className="h-4 w-4" /></button></div>
           <div className="flex flex-wrap items-center gap-4 xl:gap-3">
-            <StylistAvatar src={stylist?.avatar_url} name={user.name} size="lg" />
+            <StylistAvatar src={user.avatar_url || stylist?.avatar_url} name={user.name} size="lg" />
             <div className="min-w-0 flex-1"><h3 className="text-lg font-extrabold text-[#14213D]">{user.name}</h3><p className="text-sm font-semibold text-[#475467]">{stylist?.role || 'Stylist'}</p>
               <p className="mt-3 break-all text-xs text-[#14213D]">{user.email}</p><p className="mt-2 flex items-center gap-2 text-xs font-bold text-emerald-700"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Active</p>
             </div>

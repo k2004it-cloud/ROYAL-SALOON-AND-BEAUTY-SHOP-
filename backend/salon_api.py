@@ -6,6 +6,7 @@ client formula records, stylist commissions, and CSV ledger export.
 """
 
 import csv
+import base64
 import datetime
 from email.message import EmailMessage
 import hashlib
@@ -230,6 +231,7 @@ def init_db() -> None:
                 pin_hash TEXT NOT NULL,
                 stylist_id TEXT NOT NULL DEFAULT '',
                 phone TEXT NOT NULL DEFAULT '',
+                avatar_url TEXT NOT NULL DEFAULT '',
                 role TEXT NOT NULL CHECK(role IN ('admin', 'employee')),
                 is_superadmin INTEGER NOT NULL DEFAULT 0,
                 active INTEGER NOT NULL DEFAULT 1,
@@ -549,6 +551,8 @@ def init_db() -> None:
             cur.execute("ALTER TABLE users ADD COLUMN stylist_id TEXT NOT NULL DEFAULT ''")
         if "phone" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
+        if "avatar_url" not in user_columns:
+            cur.execute("ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''")
         if "job_title" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN job_title TEXT NOT NULL DEFAULT ''")
         if "is_superadmin" not in user_columns:
@@ -788,11 +792,37 @@ def _public_user(row: sqlite3.Row | dict) -> dict:
         "username": row["username"],
         "email": row["email"],
         "phone": row["phone"] if "phone" in row.keys() else "",
+        "avatar_url": row["avatar_url"] if "avatar_url" in row.keys() else "",
         "job_title": row["job_title"] if "job_title" in row.keys() else "",
         "stylist_id": row["stylist_id"] if "stylist_id" in row.keys() else "",
         "role": "superadmin" if ("is_superadmin" in row.keys() and bool(row["is_superadmin"])) else row["role"],
         "active": bool(row["active"]),
     }
+
+
+def _validate_avatar_url(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("Choose a valid image file.")
+    if not value:
+        return ""
+    if len(value) > 120_000:
+        raise ValueError("Profile images must be 120 KB or smaller after compression.")
+    match = re.fullmatch(r"data:image/(webp|png|jpeg);base64,([A-Za-z0-9+/]+={0,2})", value)
+    if not match:
+        raise ValueError("Use a JPG, PNG, or WebP profile image.")
+    try:
+        image_bytes = base64.b64decode(match.group(2), validate=True)
+    except (ValueError, base64.binascii.Error) as exc:
+        raise ValueError("The profile image could not be read. Choose it again.") from exc
+    image_type = match.group(1)
+    valid_signature = (
+        image_type == "jpeg" and image_bytes.startswith(b"\xff\xd8\xff")
+        or image_type == "png" and image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+        or image_type == "webp" and image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP"
+    )
+    if not valid_signature:
+        raise ValueError("The selected file is not a valid JPG, PNG, or WebP image.")
+    return value
 
 
 def _session_token_from_cookie(cookie_header: str | None) -> str:
@@ -1914,7 +1944,7 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                 if path == "/api/employees":
                     employees = conn.execute(
-                        "SELECT id, name, username, email, phone, job_title, stylist_id, role, active, created_at FROM users WHERE role = 'employee' ORDER BY name"
+                        "SELECT id, name, username, email, phone, job_title, stylist_id, avatar_url, role, active, created_at FROM users WHERE role = 'employee' ORDER BY name"
                     ).fetchall()
                     self._send_json(200, {"employees": [_public_user(row) | {"created_at": row["created_at"]} for row in employees]})
                     return
@@ -2814,6 +2844,11 @@ class SalonHandler(BaseHTTPRequestHandler):
                     phone = body.get("phone", "")
                     job_title = body.get("job_title", "")
                     password = body.get("password", "")
+                    try:
+                        avatar_url = _validate_avatar_url(body.get("avatar_url", ""))
+                    except ValueError as error:
+                        self._send_json(400, {"error": str(error)})
+                        return
                     if not isinstance(phone, str) or len(phone.strip()) > 40:
                         self._send_json(400, {"error": "Phone number must be text and 40 characters or fewer."})
                         return
@@ -2847,14 +2882,14 @@ class SalonHandler(BaseHTTPRequestHandler):
                     now_iso = datetime.datetime.now().isoformat(timespec="seconds")
                     conn.execute(
                         """
-                        INSERT INTO users (id, name, username, email, phone, job_title, password_salt, password_hash, pin_salt, pin_hash, stylist_id, role, active, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'employee', 1, ?)
+                        INSERT INTO users (id, name, username, email, phone, job_title, password_salt, password_hash, pin_salt, pin_hash, stylist_id, avatar_url, role, active, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'employee', 1, ?)
                         """,
-                        (employee_id, name, username, email, phone, job_title, password_salt, password_digest, pin_salt, pin_digest, stylist_id, now_iso),
+                        (employee_id, name, username, email, phone, job_title, password_salt, password_digest, pin_salt, pin_digest, stylist_id, avatar_url, now_iso),
                     )
                     conn.execute(
-                        "INSERT INTO stylists (id, name, role, specialty, avatar_url, commission_rate, active) VALUES (?, ?, ?, ?, '', 0.35, 1)",
-                        (employee_id, name, job_title, job_title),
+                        "INSERT INTO stylists (id, name, role, specialty, avatar_url, commission_rate, active) VALUES (?, ?, ?, ?, ?, 0.35, 1)",
+                        (employee_id, name, job_title, job_title, avatar_url),
                     )
                     _record_audit_event(conn, user, "create", "employee", "Employee account created.", employee_id)
                     conn.commit()
@@ -2870,6 +2905,11 @@ class SalonHandler(BaseHTTPRequestHandler):
                     username = body.get("username", "").strip().lower()
                     email = body.get("email", "").strip().lower()
                     password = body.get("password", "")
+                    try:
+                        avatar_url = _validate_avatar_url(body.get("avatar_url", ""))
+                    except ValueError as error:
+                        self._send_json(400, {"error": str(error)})
+                        return
                     if not name or len(name) > 120 or not USERNAME_PATTERN.fullmatch(username):
                         self._send_json(400, {"error": "Enter a username with 3-30 letters, numbers, dots, dashes or underscores."})
                         return
@@ -2884,8 +2924,8 @@ class SalonHandler(BaseHTTPRequestHandler):
                     admin_id = f"usr-{uuid.uuid4().hex[:12]}"
                     now_iso = datetime.datetime.now().isoformat(timespec="seconds")
                     conn.execute(
-                        "INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, role, is_superadmin, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin', 0, 1, ?)",
-                        (admin_id, name, username, email, password_salt, password_digest, pin_salt, pin_digest, now_iso),
+                        "INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, avatar_url, role, is_superadmin, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin', 0, 1, ?)",
+                        (admin_id, name, username, email, password_salt, password_digest, pin_salt, pin_digest, avatar_url, now_iso),
                     )
                     _record_audit_event(conn, user, "create", "admin_account", "Admin account created by Superadmin.", admin_id)
                     conn.commit()
@@ -3399,9 +3439,16 @@ class SalonHandler(BaseHTTPRequestHandler):
                     name = body.get("name", user["name"])
                     email = body.get("email", user["email"])
                     phone = body.get("phone", user["phone"] or "")
+                    avatar_url = user["avatar_url"] or ""
                     if not all(isinstance(value, str) for value in (name, email, phone)):
                         self._send_json(400, {"error": "Profile fields must be text values."})
                         return
+                    if "avatar_url" in body:
+                        try:
+                            avatar_url = _validate_avatar_url(body["avatar_url"])
+                        except ValueError as error:
+                            self._send_json(400, {"error": str(error)})
+                            return
                     name, email, phone = name.strip(), email.strip().lower(), phone.strip()
                     if not name or len(name) > 120:
                         self._send_json(400, {"error": "Name is required and must be 120 characters or fewer."})
@@ -3419,7 +3466,9 @@ class SalonHandler(BaseHTTPRequestHandler):
                     if conflict:
                         self._send_json(409, {"error": "Another staff account already uses that email."})
                         return
-                    conn.execute("UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ?", (name, email, phone, user["id"]))
+                    conn.execute("UPDATE users SET name = ?, email = ?, phone = ?, avatar_url = ? WHERE id = ?", (name, email, phone, avatar_url, user["id"]))
+                    if user["stylist_id"]:
+                        conn.execute("UPDATE stylists SET avatar_url = ?, name = ? WHERE id = ?", (avatar_url, name, user["stylist_id"]))
                     _record_audit_event(conn, user, "update", "staff_profile", "Staff profile contact details updated.", user["id"])
                     conn.commit()
                     updated = conn.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()

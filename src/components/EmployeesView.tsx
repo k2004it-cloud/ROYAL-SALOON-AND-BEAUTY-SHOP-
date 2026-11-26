@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { KeyRound, Plus, UserRound, UserRoundX, X } from 'lucide-react';
 import type { StaffUser } from '../types';
 import { salonApi } from '../api/client';
+import { ProfileImagePicker } from './ProfileImagePicker';
+import { StylistAvatar } from './StylistAvatar';
 
 interface EmployeesViewProps {
   onNotify: (message: string) => void;
@@ -18,6 +20,7 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [jobTitle, setJobTitle] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -54,13 +57,14 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
     setError('');
     setSaving(true);
     try {
-      await salonApi.createEmployee({ name, username, email, phone, job_title: jobTitle, password });
+      await salonApi.createEmployee({ name, username, email, phone, job_title: jobTitle, password, avatar_url: avatarUrl });
       setModalOpen(false);
       setName('');
       setUsername('');
       setEmail('');
       setPhone('');
       setJobTitle('');
+      setAvatarUrl('');
       setPassword('');
       await loadEmployees();
       onNotify('Employee account created');
@@ -135,9 +139,7 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
           {employees.map((employee) => (
             <article key={employee.id} className="salon-card flex items-center justify-between gap-4 rounded-2xl p-5">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#E8F1FF] text-[#0B5ED7]">
-                  <UserRound className="h-5 w-5" />
-                </span>
+                <StylistAvatar src={employee.avatar_url} name={employee.name} size="md" />
                 <div className="min-w-0">
                   <h2 className="truncate text-sm font-bold text-[#14213D]">{employee.name}</h2>
                   <p className="truncate text-xs font-semibold text-[#0B5ED7]">@{employee.username}</p>
@@ -194,6 +196,7 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
                 <label htmlFor="employee-job-title" className="mb-1.5 block text-xs font-semibold text-[#344054]">Employee position / role</label>
                 <input id="employee-job-title" value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} minLength={2} maxLength={80} placeholder="e.g. Hair Stylist, Nail Technician, Receptionist" required className="salon-input w-full px-3 text-sm" />
               </div>
+              <ProfileImagePicker name={name || 'Employee'} value={avatarUrl} onChange={setAvatarUrl} />
               <div>
                 <label htmlFor="employee-username" className="mb-1.5 block text-xs font-semibold text-[#344054]">Username</label>
                 <input id="employee-username" autoComplete="off" minLength={3} maxLength={30} pattern={'[A-Za-z0-9._\\-]{3,30}'} value={username} onChange={(event) => setUsername(event.target.value)} required className="salon-input w-full px-3 text-sm" />

@@ -360,7 +360,7 @@ function EmployeeOverview({ employees, stylists, loading, error, onViewAll }: {
             const stylist = stylists.find((item) => item.id === employee.stylist_id);
             return (
               <div key={employee.id} className="flex items-center gap-2.5 py-2 xl:py-1.5">
-                <StylistAvatar src={stylist?.avatar_url} name={employee.name} size="sm" />
+                <StylistAvatar src={employee.avatar_url || stylist?.avatar_url} name={employee.name} size="sm" />
                 <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-[#14213D]">{employee.name}</span>
                 <span className="hidden text-[10px] text-[#667085] sm:block">{stylist?.role || 'Employee'}</span>
                 <span className="rounded-full bg-[#DCFCE7] px-2 py-1 text-[9px] font-bold text-[#15803D]">Active</span>

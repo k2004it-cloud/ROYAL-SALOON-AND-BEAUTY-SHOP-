@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { KeyRound, LockKeyhole, Plus, ShieldCheck, UserRound, UserRoundX } from 'lucide-react';
+import { KeyRound, LockKeyhole, Plus, ShieldCheck, UserRoundX } from 'lucide-react';
 import type { StaffUser } from '../types';
 import { salonApi } from '../api/client';
+import { ProfileImagePicker } from './ProfileImagePicker';
+import { StylistAvatar } from './StylistAvatar';
 
 export function AdminAccountsView({ onNotify }: { onNotify: (message: string) => void }) {
   const [admins, setAdmins] = useState<StaffUser[]>([]);
@@ -11,6 +13,7 @@ export function AdminAccountsView({ onNotify }: { onNotify: (message: string) =>
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [temporaryCredential, setTemporaryCredential] = useState<{ username: string; password: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -34,8 +37,8 @@ export function AdminAccountsView({ onNotify }: { onNotify: (message: string) =>
     setBusy(true);
     setError('');
     try {
-      await salonApi.createAdminAccount({ name, username, email, password });
-      setName(''); setUsername(''); setEmail(''); setPassword(''); setFormOpen(false);
+      await salonApi.createAdminAccount({ name, username, email, password, avatar_url: avatarUrl });
+      setName(''); setUsername(''); setEmail(''); setPassword(''); setAvatarUrl(''); setFormOpen(false);
       await loadAdmins();
       onNotify('Admin account created');
     } catch (cause) {
@@ -96,10 +99,11 @@ export function AdminAccountsView({ onNotify }: { onNotify: (message: string) =>
         <label className="text-xs font-semibold text-[#344054]">Username<input value={username} onChange={(event) => setUsername(event.target.value)} required minLength={3} maxLength={30} pattern="[A-Za-z0-9._\-]{3,30}" className="salon-input mt-1 w-full px-3 text-sm" /></label>
         <label className="text-xs font-semibold text-[#344054]">Work email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required maxLength={254} className="salon-input mt-1 w-full px-3 text-sm" /></label>
         <label className="text-xs font-semibold text-[#344054]">Initial password (10+ characters)<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={10} maxLength={128} autoComplete="new-password" className="salon-input mt-1 w-full px-3 text-sm" /></label>
+        <div className="sm:col-span-2"><ProfileImagePicker name={name || 'Admin'} value={avatarUrl} onChange={setAvatarUrl} /></div>
         <div className="flex justify-end gap-2 sm:col-span-2"><button type="button" onClick={() => setFormOpen(false)} className="h-10 rounded-lg border border-[#DDE6F1] px-4 text-xs font-semibold text-[#344054]">Cancel</button><button disabled={busy} className="h-10 rounded-lg bg-[#0B5ED7] px-4 text-xs font-bold text-white disabled:opacity-60">{busy ? 'Creating…' : 'Create Admin'}</button></div>
       </form>}
 
-      {loading ? <p className="py-5 text-center text-sm text-[#64748B]">Loading Admin accounts…</p> : admins.length === 0 ? <p className="rounded-xl bg-[#F8FAFD] px-4 py-6 text-center text-sm text-[#64748B]">No additional Admin accounts have been created.</p> : <div className="grid gap-3 lg:grid-cols-2">{admins.map((admin) => <article key={admin.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E1E7F0] p-4"><div className="flex min-w-0 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8F1FF] text-[#0B5ED7]"><UserRound className="h-5 w-5" /></span><div className="min-w-0"><p className="truncate text-sm font-bold text-[#14213D]">{admin.name}</p><p className="truncate text-xs text-[#475467]">@{admin.username} · {admin.email}</p><span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${admin.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{admin.active ? 'Active' : 'Disabled'}</span></div></div><div className="flex items-center gap-2"><button type="button" onClick={() => void handleResetPassword(admin)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#DDE6F1] px-3 text-xs font-semibold text-[#344054]"><KeyRound className="h-3.5 w-3.5" />Reset password</button><button type="button" onClick={() => void handleToggle(admin)} aria-label={`${admin.active ? 'Disable' : 'Restore'} ${admin.name}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#DDE6F1] px-3 text-xs font-semibold text-[#344054]">{admin.active ? <><UserRoundX className="h-3.5 w-3.5" />Disable</> : <><LockKeyhole className="h-3.5 w-3.5" />Restore</>}</button></div></article>)}</div>}
+      {loading ? <p className="py-5 text-center text-sm text-[#64748B]">Loading Admin accounts…</p> : admins.length === 0 ? <p className="rounded-xl bg-[#F8FAFD] px-4 py-6 text-center text-sm text-[#64748B]">No additional Admin accounts have been created.</p> : <div className="grid gap-3 lg:grid-cols-2">{admins.map((admin) => <article key={admin.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E1E7F0] p-4"><div className="flex min-w-0 items-center gap-3"><StylistAvatar src={admin.avatar_url} name={admin.name} size="md" /><div className="min-w-0"><p className="truncate text-sm font-bold text-[#14213D]">{admin.name}</p><p className="truncate text-xs text-[#475467]">@{admin.username} · {admin.email}</p><span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${admin.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{admin.active ? 'Active' : 'Disabled'}</span></div></div><div className="flex items-center gap-2"><button type="button" onClick={() => void handleResetPassword(admin)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#DDE6F1] px-3 text-xs font-semibold text-[#344054]"><KeyRound className="h-3.5 w-3.5" />Reset password</button><button type="button" onClick={() => void handleToggle(admin)} aria-label={`${admin.active ? 'Disable' : 'Restore'} ${admin.name}`} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#DDE6F1] px-3 text-xs font-semibold text-[#344054]">{admin.active ? <><UserRoundX className="h-3.5 w-3.5" />Disable</> : <><LockKeyhole className="h-3.5 w-3.5" />Restore</>}</button></div></article>)}</div>}
     </section>
   );
 }

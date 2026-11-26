@@ -4,6 +4,7 @@ import type { Appointment, AppointmentStatus, CatalogItem, Client, EmployeeDashb
 import { formatKsh, salonApi } from '../api/client';
 import { StatusBadge } from './StatusBadge';
 import { StylistAvatar } from './StylistAvatar';
+import { ProfileImagePicker } from './ProfileImagePicker';
 
 interface EmployeePagesProps {
   tab: WorkspaceTab;
@@ -57,6 +58,7 @@ export function EmployeePages({ tab, appointments, clients, catalog, stylists, u
   const [profileName, setProfileName] = useState(user.name);
   const [profileEmail, setProfileEmail] = useState(user.email);
   const [profilePhone, setProfilePhone] = useState(user.phone ?? '');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState(user.avatar_url ?? '');
   const [profileNotice, setProfileNotice] = useState('');
   const [profileError, setProfileError] = useState('');
   const [profileBusy, setProfileBusy] = useState(false);
@@ -215,7 +217,7 @@ export function EmployeePages({ tab, appointments, clients, catalog, stylists, u
     setProfileNotice('');
     setProfileBusy(true);
     try {
-      const result = await salonApi.updateProfile({ name: profileName, email: profileEmail, phone: profilePhone });
+      const result = await salonApi.updateProfile({ name: profileName, email: profileEmail, phone: profilePhone, avatar_url: profileAvatarUrl });
       onProfileUpdated(result.user);
       setProfileNotice('Your profile details were saved.');
     } catch (error) {
@@ -351,9 +353,10 @@ export function EmployeePages({ tab, appointments, clients, catalog, stylists, u
       {tab === 'profile' && (
         <div className="grid gap-4 xl:grid-cols-2">
           <section className="salon-card rounded-2xl p-5">
-            <div className="flex items-center gap-4"><StylistAvatar src={stylist?.avatar_url} name={user.name} size="lg" /><div><h2 className="text-xl font-extrabold text-[#14213D]">{user.name}</h2><p className="text-sm text-[#64748B]">{user.job_title || stylist?.role || 'Employee'} · {stylist?.specialty || 'Salon team'}</p><p className="mt-1 text-[10px] font-semibold text-[#475467]">Employee ID: {user.id}</p><p className="text-[10px] text-[#64748B]">{user.phone || 'No phone set'} · {user.email}</p></div></div>
+            <div className="flex items-center gap-4"><StylistAvatar src={profileAvatarUrl || stylist?.avatar_url} name={user.name} size="lg" /><div><h2 className="text-xl font-extrabold text-[#14213D]">{user.name}</h2><p className="text-sm text-[#64748B]">{user.job_title || stylist?.role || 'Employee'} · {stylist?.specialty || 'Salon team'}</p><p className="mt-1 text-[10px] font-semibold text-[#475467]">Employee ID: {user.id}</p><p className="text-[10px] text-[#64748B]">{user.phone || 'No phone set'} · {user.email}</p></div></div>
             <div className="mt-4 border-t border-[#E1E7F0] pt-3"><p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-[#64748B]">Assigned services</p><div className="flex flex-wrap gap-1.5">{serviceItems.length ? serviceItems.map((service) => <span key={service.id} className="rounded-full bg-[#EFF6FF] px-2.5 py-1 text-[10px] font-semibold text-[#0757D8]">{service.name}</span>) : <span className="text-xs text-[#64748B]">No active services assigned.</span>}</div></div>
             <form onSubmit={(event) => void saveProfile(event)} className="mt-5 space-y-3 border-t border-[#E1E7F0] pt-4">
+              <ProfileImagePicker name={profileName || user.name} value={profileAvatarUrl} onChange={setProfileAvatarUrl} />
               <label className="block text-xs font-semibold text-[#344054]">Full name<input value={profileName} onChange={(event) => setProfileName(event.target.value)} maxLength={120} required className="salon-input mt-1 w-full px-3 text-sm" /></label>
               <label className="block text-xs font-semibold text-[#344054]">Work email<input type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} maxLength={254} required className="salon-input mt-1 w-full px-3 text-sm" /></label>
               <label className="block text-xs font-semibold text-[#344054]">Phone number<input type="tel" value={profilePhone} onChange={(event) => setProfilePhone(event.target.value)} maxLength={40} className="salon-input mt-1 w-full px-3 text-sm" /></label>
