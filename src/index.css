@@ -32,11 +32,13 @@
 
   #root {
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.58)),
-      url("/background%20image.jpg");
+      linear-gradient(rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.62)),
+      url('/royal-salon-background.webp');
     background-attachment: fixed;
-    background-position: center;
+    background-position: center center;
+    background-repeat: no-repeat;
     background-size: cover;
+    background-color: #F4F7FC;
     min-height: 100vh;
   }
 
