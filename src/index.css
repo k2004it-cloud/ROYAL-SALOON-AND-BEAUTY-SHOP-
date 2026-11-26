@@ -135,6 +135,10 @@ html[data-theme='dark'] {
   background-color: #101722;
 }
 
+html[data-theme='light'] {
+  color-scheme: light;
+}
+
 html[data-theme='dark'] body {
   color: #E5EAF2;
   background-color: #101722;
@@ -202,10 +206,12 @@ html[data-theme='dark'] [class~="bg-[#F5F6FF]"],
 html[data-theme='dark'] [class~="bg-[#F1F4F9]"],
 html[data-theme='dark'] [class~="bg-[#F1F4FF]"],
 html[data-theme='dark'] [class~="bg-[#F3F5FF]"],
+html[data-theme='dark'] [class~="bg-[#F3F6FD]"],
 html[data-theme='dark'] [class~="bg-[#EFF4FF]"],
 html[data-theme='dark'] [class~="bg-[#EAF2FF]"],
 html[data-theme='dark'] [class~="bg-[#E8F1FF]"],
 html[data-theme='dark'] [class~="bg-[#F3EDE8]"],
+html[data-theme='dark'] [class~="bg-[#F7F9FC]"],
 html[data-theme='dark'] [class~="bg-[#EDE9FE]"],
 html[data-theme='dark'] [class~="bg-[#DDD6FE]"],
 html[data-theme='dark'] [class~="bg-[#EFF6FF]"],
@@ -244,11 +250,14 @@ html[data-theme='dark'] [class~="text-[#151C27]"],
 html[data-theme='dark'] [class~="text-[#071B53]"],
 html[data-theme='dark'] [class~="text-[#153560]"],
 html[data-theme='dark'] [class~="text-[#12396D]"],
+html[data-theme='dark'] [class~="text-[#344E91]"],
+html[data-theme='dark'] [class~="text-[#475F9F]"],
 html[data-theme='dark'] [class~="text-[#344054]"],
 html[data-theme='dark'] [class~="text-[#475467]"],
 html[data-theme='dark'] [class~="text-[#667085]"],
 html[data-theme='dark'] [class~="text-[#64748B]"],
-html[data-theme='dark'] [class~="text-[#98A2B3]"] {
+html[data-theme='dark'] [class~="text-[#98A2B3]"],
+html[data-theme='dark'] [class~="text-[#7B8798]"] {
   color: #D5DDE8 !important;
 }
 
@@ -272,7 +281,8 @@ html[data-theme='dark'] [class~="text-[#C2410C]"] {
 
 html[data-theme='dark'] [class~="text-[#047857]"],
 html[data-theme='dark'] [class~="text-[#16A34A]"],
-html[data-theme='dark'] [class~="text-[#10B981]"] {
+html[data-theme='dark'] [class~="text-[#10B981]"],
+html[data-theme='dark'] [class~="text-[#15803D]"] {
   color: #86EFAC !important;
 }
 
@@ -314,10 +324,12 @@ html[data-theme='dark'] [class~="border-[#E1E7F1]"],
 html[data-theme='dark'] [class~="border-[#DDE6F1]"],
 html[data-theme='dark'] [class~="border-[#D8E4F2]"],
 html[data-theme='dark'] [class~="border-[#D8DFFA]"],
+html[data-theme='dark'] [class~="border-[#D8E1FA]"],
 html[data-theme='dark'] [class~="border-[#DFE7F1]"],
 html[data-theme='dark'] [class~="border-[#E7ECF5]"],
 html[data-theme='dark'] [class~="border-[#EEF1F6]"],
 html[data-theme='dark'] [class~="border-[#C5D8F4]"],
+html[data-theme='dark'] [class~="border-[#DDD6FE]"],
 html[data-theme='dark'] [class~="border-[#D8E7FB]"],
 html[data-theme='dark'] [class~="border-[#C9D5E5]"] {
   border-color: #3A495C !important;
@@ -327,8 +339,36 @@ html[data-theme='dark'] [class~="border-amber-300"],
 html[data-theme='dark'] [class~="border-amber-400"],
 html[data-theme='dark'] [class~="border-emerald-200"],
 html[data-theme='dark'] [class~="border-red-100"],
-html[data-theme='dark'] [class~="border-red-200"] {
+html[data-theme='dark'] [class~="border-red-200"],
+html[data-theme='dark'] [class~="border-[#FECACA]"],
+html[data-theme='dark'] [class~="border-[#FDE68A]"] {
   border-color: #4B596B !important;
+}
+
+html[data-theme='dark'] [class*="hover:bg-[#EFF4FF]"]:hover,
+html[data-theme='dark'] [class*="hover:bg-[#EAF2FF]"]:hover,
+html[data-theme='dark'] [class*="hover:bg-[#E8F1FF]"]:hover,
+html[data-theme='dark'] [class*="hover:bg-[#F1F4F9]"]:hover,
+html[data-theme='dark'] [class*="hover:bg-[#F3F6FD]"]:hover,
+html[data-theme='dark'] [class*="hover:bg-[#F4F7FC]"]:hover,
+html[data-theme='dark'] [class*="hover:bg-[#F8FAFF]"]:hover,
+html[data-theme='dark'] [class~="hover:bg-white"]:hover,
+html[data-theme='dark'] [class~="hover:bg-white/80"]:hover {
+  background-color: #273548 !important;
+}
+
+html[data-theme='dark'] [class*="hover:bg-[#FEF2F2]"]:hover,
+html[data-theme='dark'] [class~="hover:bg-red-50"]:hover {
+  background-color: #3A252B !important;
+}
+
+html[data-theme='dark'] [class*="hover:text-[#0B5ED7]"]:hover,
+html[data-theme='dark'] [class*="hover:text-[#0757D8]"]:hover {
+  color: #93C5FD !important;
+}
+
+html[data-theme='dark'] [class*="hover:text-[#EF4444]"]:hover {
+  color: #FCA5A5 !important;
 }
 
 .salon-sheet {
