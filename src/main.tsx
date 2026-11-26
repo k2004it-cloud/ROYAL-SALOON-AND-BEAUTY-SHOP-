@@ -11,7 +11,30 @@ createRoot(document.getElementById('root')!).render(
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((error: unknown) => {
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloadedForUpdate = false;
+    if (hadController) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloadedForUpdate) return;
+        reloadedForUpdate = true;
+        window.location.reload();
+      });
+    }
+
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
+      const checkForUpdate = () => {
+        if (document.visibilityState === 'visible') {
+          void registration.update().catch((error: unknown) => {
+            console.warn('Royal Salon could not check for an app update.', error);
+          });
+        }
+      };
+
+      checkForUpdate();
+      window.setInterval(checkForUpdate, 30 * 60 * 1000);
+      window.addEventListener('focus', checkForUpdate);
+      document.addEventListener('visibilitychange', checkForUpdate);
+    }).catch((error: unknown) => {
       console.error('Royal Salon offline support could not be enabled.', error);
     });
   });

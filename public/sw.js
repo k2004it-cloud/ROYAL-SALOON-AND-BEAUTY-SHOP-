@@ -1,4 +1,4 @@
-const CACHE_NAME = 'royal-salon-static-v2';
+const CACHE_NAME = 'royal-salon-static-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
