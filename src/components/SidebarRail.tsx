@@ -22,8 +22,9 @@ import {
   X,
   Gift,
   ReceiptText,
+  ShieldCheck,
 } from 'lucide-react';
-import type { StaffUser, WorkspaceTab } from '../types';
+import { isAdminRole, type StaffUser, type WorkspaceTab } from '../types';
 
 interface SidebarRailProps {
   activeTab: WorkspaceTab;
@@ -89,6 +90,8 @@ const EMPLOYEE_NAV_ITEMS: Array<{
   { id: 'support', label: 'Help & Support', shortLabel: 'Help', Icon: CircleHelp },
 ];
 
+const SUPERADMIN_NAV_ITEM = { id: 'superadmin' as const, label: 'Superadmin', shortLabel: 'Owner', Icon: ShieldCheck };
+
 export function SidebarRail({
   activeTab,
   businessName,
@@ -104,7 +107,9 @@ export function SidebarRail({
   user,
   onLogout,
 }: SidebarRailProps) {
-  const visibleNavItems = user.role === 'admin' ? ADMIN_NAV_ITEMS : EMPLOYEE_NAV_ITEMS;
+  const visibleNavItems = user.role === 'superadmin'
+    ? [SUPERADMIN_NAV_ITEM, ...ADMIN_NAV_ITEMS]
+    : isAdminRole(user.role) ? ADMIN_NAV_ITEMS : EMPLOYEE_NAV_ITEMS;
   const getBadgeCount = (id: WorkspaceTab) =>
     id === 'pos' && cartCount > 0 ? cartCount
       : id === 'inventory' && lowStockCount > 0 ? lowStockCount
@@ -210,7 +215,7 @@ export function SidebarRail({
             <div className="min-w-0">
               <p className="truncate text-[10px] font-bold text-white">{user.name}</p>
               <p className="text-[9px] uppercase tracking-[0.12em] text-[#D5E4FF]/70">
-                {user.role === 'admin' ? 'Owner / Admin' : 'Employee'}
+                {user.role === 'superadmin' ? 'Superadmin' : user.role === 'admin' ? 'Owner / Admin' : 'Employee'}
               </p>
             </div>
           )}
@@ -247,7 +252,7 @@ export function SidebarRail({
             })}</div>
           </nav>
           <div className="flex items-center justify-between border-t border-white/10 bg-[#081B36]/70 p-4">
-            <div className="min-w-0"><p className="truncate text-xs font-bold text-white">{user.name}</p><p className="text-[9px] uppercase tracking-[0.12em] text-[#D5E4FF]/70">{user.role === 'admin' ? 'Owner / Admin' : 'Employee'}</p></div>
+            <div className="min-w-0"><p className="truncate text-xs font-bold text-white">{user.name}</p><p className="text-[9px] uppercase tracking-[0.12em] text-[#D5E4FF]/70">{user.role === 'superadmin' ? 'Superadmin' : user.role === 'admin' ? 'Owner / Admin' : 'Employee'}</p></div>
             <button type="button" onClick={onLogout} aria-label="Sign out" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#D5E4FF]/80 hover:bg-white/10 hover:text-white"><LogOut className="h-4 w-4" /></button>
           </div>
         </aside>

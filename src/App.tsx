@@ -14,6 +14,7 @@ import type {
   StaffRole,
   WorkspaceTab,
 } from './types';
+import { isAdminRole } from './types';
 import { formatKsh, salonApi, todayIsoDate } from './api/client';
 import { SidebarRail } from './components/SidebarRail';
 import { ScheduleView } from './components/ScheduleView';
@@ -34,9 +35,15 @@ import { TasksView } from './components/TasksView';
 import { InventoryReportsView } from './components/InventoryReportsView';
 import { PayrollView } from './components/PayrollView';
 import { ExpensesView, LoyaltyView } from './components/BusinessTrackingViews';
+import { SuperadminView } from './components/SuperadminView';
 import { Bell, CalendarDays, ChevronDown, Crown, LogOut, Menu, Search } from 'lucide-react';
 
 const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
+  superadmin: [
+    'dashboard', 'superadmin', 'clients', 'loyalty', 'expenses', 'employees', 'catalog',
+    'schedule', 'pos', 'inventory', 'reports', 'payroll', 'attendance', 'tasks',
+    'notifications', 'settings', 'system-logs', 'backups', 'support',
+  ],
   admin: [
     'dashboard',
     'clients',
@@ -79,11 +86,11 @@ const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
 
 function roleFromPath(path: string): StaffRole | null {
   const firstSegment = path.split('/').filter(Boolean)[0];
-  return firstSegment === 'admin' || firstSegment === 'employee' ? firstSegment : null;
+  return firstSegment === 'superadmin' || firstSegment === 'admin' || firstSegment === 'employee' ? firstSegment : null;
 }
 
 function defaultTabForRole(role: StaffRole): WorkspaceTab {
-  return role === 'admin' ? 'dashboard' : 'my-day';
+  return isAdminRole(role) ? 'dashboard' : 'my-day';
 }
 
 function tabFromPath(path: string, role: StaffRole): WorkspaceTab {
@@ -259,7 +266,7 @@ export default function App() {
         salonApi.listAnnouncements(),
       ]);
       setUnreadAnnouncementCount(announcementResult.unread_count);
-      if (status.user?.role === 'admin') {
+      if (status.user && isAdminRole(status.user.role)) {
         setOpenSupportCount(supportResult.requests.filter((request) => request.status !== 'resolved').length);
       } else if (status.user?.role === 'employee') {
         const lastSeen = Number(window.localStorage.getItem('salon-support-seen-' + status.user.id) || 0);
@@ -565,6 +572,7 @@ export default function App() {
       ]
     : [
         { label: 'Dashboard', tab: 'dashboard' },
+        ...(authUser?.role === 'superadmin' ? [{ label: 'Superadmin', tab: 'superadmin' as WorkspaceTab }] : []),
         { label: 'Notifications', tab: 'notifications' },
         { label: 'Clients', tab: 'clients' },
         { label: 'Loyalty Points', tab: 'loyalty' },
@@ -737,12 +745,12 @@ export default function App() {
             <div className="relative">
               <button type="button" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)} className="flex items-center gap-2 rounded-xl p-1.5 text-left hover:bg-[#F3F6FD]">
                 {profileStylist?.avatar_url ? <img src={profileStylist.avatar_url} alt="" className="h-11 w-11 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8F1FF] text-sm font-bold text-[#0757D8]">{authUser.name.slice(0, 1).toUpperCase()}</span>}
-                <span className="hidden min-w-0 sm:block"><span className="block max-w-36 truncate text-xs font-bold text-[#14213D]">{authUser.name}</span><span className="block text-[10px] text-[#475467]">{authUser.role === 'employee' ? (profileStylist?.role || 'Stylist') : 'Owner / Admin'}</span></span>
+                <span className="hidden min-w-0 sm:block"><span className="block max-w-36 truncate text-xs font-bold text-[#14213D]">{authUser.name}</span><span className="block text-[10px] text-[#475467]">{authUser.role === 'employee' ? (profileStylist?.role || 'Stylist') : authUser.role === 'superadmin' ? 'Superadmin' : 'Owner / Admin'}</span></span>
                 <ChevronDown className="hidden h-4 w-4 text-[#071B53] sm:block" />
               </button>
               {profileMenuOpen && <div className="absolute right-0 top-14 z-50 w-48 rounded-xl border border-[#DDE6F1] bg-white p-1 shadow-xl">
                 {authUser.role === 'employee' && <button type="button" onClick={() => { navigateToTab('profile'); setProfileMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#14213D] hover:bg-[#EFF4FF]">My Profile</button>}
-                {authUser.role === 'admin' && <button type="button" onClick={() => { navigateToTab('settings'); setProfileMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#14213D] hover:bg-[#EFF4FF]">Settings</button>}
+                {isAdminRole(authUser.role) && <button type="button" onClick={() => { navigateToTab('settings'); setProfileMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-[#14213D] hover:bg-[#EFF4FF]">Settings</button>}
                 <button type="button" onClick={() => void handleLogout()} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50"><LogOut className="h-4 w-4" />Sign out</button>
               </div>}
             </div>
@@ -750,7 +758,7 @@ export default function App() {
               <CalendarDays className="h-4 w-4 text-[#2563EB]" />{formatReadableDate(businessDate)}
             </div>
           </div>
-          {activeTab === 'dashboard' && authUser.role === 'admin' && (
+          {activeTab === 'dashboard' && isAdminRole(authUser.role) && (
             <AdminDashboardView
               userName={authUser.name}
               date={businessDate}
@@ -795,12 +803,13 @@ export default function App() {
             />
           )}
           {activeTab === 'notifications' && <NotificationsView user={authUser} appointments={data.appointments} dashboard={data.employee_dashboard} />}
+          {activeTab === 'superadmin' && authUser.role === 'superadmin' && <SuperadminView onNavigate={navigateToTab} />}
           {activeTab === 'loyalty' && <LoyaltyView clients={data.clients} />}
           {activeTab === 'expenses' && <ExpensesView />}
           {activeTab === 'timesheet' && authUser.role === 'employee' && <EmployeeAttendanceView openingTime={data.business_settings.opening_time} />}
-          {activeTab === 'attendance' && authUser.role === 'admin' && <AttendanceView openingTime={data.business_settings.opening_time} />}
+          {activeTab === 'attendance' && isAdminRole(authUser.role) && <AttendanceView openingTime={data.business_settings.opening_time} />}
           {activeTab === 'tasks' && <TasksView user={authUser} />}
-          {activeTab === 'payroll' && authUser.role === 'admin' && <PayrollView />}
+          {activeTab === 'payroll' && isAdminRole(authUser.role) && <PayrollView />}
           {activeTab === 'schedule' && (
             <ScheduleView
               date={businessDate}
@@ -830,7 +839,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'employees' && authUser.role === 'admin' && (
+          {activeTab === 'employees' && isAdminRole(authUser.role) && (
             <EmployeesView onNotify={showToast} demoMode={demoMode} stylists={data.stylists} />
           )}
 
@@ -870,18 +879,18 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'clients' && authUser.role === 'admin' && (
+          {activeTab === 'clients' && isAdminRole(authUser.role) && (
             <ClientsView
               clients={data.clients}
               stylists={data.stylists}
               onCreateClient={handleCreateClient}
               onUpdateClient={handleUpdateClient}
               onOpenPosForClient={handleOpenPosForClient}
-              showFinancials={authUser.role === 'admin'}
+              showFinancials={isAdminRole(authUser.role)}
             />
           )}
 
-          {activeTab === 'catalog' && authUser.role === 'admin' && (
+          {activeTab === 'catalog' && isAdminRole(authUser.role) && (
             <CatalogView
               key={activeTab}
               initialTab="service"
@@ -890,7 +899,7 @@ export default function App() {
               onAdjustStock={handleAdjustStock}
             />
           )}
-          {activeTab === 'inventory' && authUser.role === 'admin' && (
+          {activeTab === 'inventory' && isAdminRole(authUser.role) && (
             <>
               <CatalogView
                 key={activeTab}
@@ -902,7 +911,7 @@ export default function App() {
               <InventoryReportsView />
             </>
           )}
-          {activeTab === 'reports' && authUser.role === 'admin' && (
+          {activeTab === 'reports' && isAdminRole(authUser.role) && (
             <LedgerView
               date={businessDate}
               analytics={data.analytics}
@@ -912,7 +921,7 @@ export default function App() {
           )}
           {(activeTab === 'settings' ||
             activeTab === 'system-logs' ||
-            activeTab === 'backups') && authUser.role === 'admin' && (
+            activeTab === 'backups') && isAdminRole(authUser.role) && (
             <SystemPages
               tab={activeTab}
               user={authUser}

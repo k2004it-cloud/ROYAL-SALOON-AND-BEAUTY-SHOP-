@@ -229,6 +229,7 @@ def init_db() -> None:
                 stylist_id TEXT NOT NULL DEFAULT '',
                 phone TEXT NOT NULL DEFAULT '',
                 role TEXT NOT NULL CHECK(role IN ('admin', 'employee')),
+                is_superadmin INTEGER NOT NULL DEFAULT 0,
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             );
@@ -531,6 +532,13 @@ def init_db() -> None:
             cur.execute("ALTER TABLE users ADD COLUMN stylist_id TEXT NOT NULL DEFAULT ''")
         if "phone" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
+        if "is_superadmin" not in user_columns:
+            cur.execute("ALTER TABLE users ADD COLUMN is_superadmin INTEGER NOT NULL DEFAULT 0")
+        if not cur.execute("SELECT 1 FROM users WHERE is_superadmin = 1 LIMIT 1").fetchone():
+            first_admin = cur.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at, id LIMIT 1").fetchone()
+            if first_admin:
+                cur.execute("UPDATE users SET is_superadmin = 1 WHERE id = ?", (first_admin["id"],))
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_single_superadmin ON users(is_superadmin) WHERE is_superadmin = 1")
 
         used_usernames: set[str] = set()
         for user in cur.execute(
@@ -684,18 +692,18 @@ def _ensure_demo_users(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 UPDATE users
-                SET name = ?, email = ?, stylist_id = ?, role = ?, active = 1
+                SET name = ?, email = ?, stylist_id = ?, role = ?, is_superadmin = ?, active = 1
                 WHERE username = ?
                 """,
-                (name, email, stylist_id, role, username),
+                (name, email, stylist_id, role, int(role == "admin"), username),
             )
             continue
         password_salt, password_digest = _credential_hash(password)
         pin_salt, pin_digest = _credential_hash(secrets.token_urlsafe(32))
         conn.execute(
             """
-            INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, stylist_id, role, active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, stylist_id, role, is_superadmin, active, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
             """,
             (
                 user_id,
@@ -708,6 +716,7 @@ def _ensure_demo_users(conn: sqlite3.Connection) -> None:
                 pin_digest,
                 stylist_id,
                 role,
+                int(role == "admin"),
                 now_iso,
             ),
         )
@@ -721,7 +730,7 @@ def _public_user(row: sqlite3.Row | dict) -> dict:
         "email": row["email"],
         "phone": row["phone"] if "phone" in row.keys() else "",
         "stylist_id": row["stylist_id"] if "stylist_id" in row.keys() else "",
-        "role": row["role"],
+        "role": "superadmin" if ("is_superadmin" in row.keys() and bool(row["is_superadmin"])) else row["role"],
         "active": bool(row["active"]),
     }
 
@@ -1520,6 +1529,22 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"user": _public_user(user)})
                     return
 
+                if path == "/api/superadmin/diagnostics":
+                    if not bool(user["is_superadmin"]):
+                        self._send_json(403, {"error": "Superadmin access is required."})
+                        return
+                    diagnostics = {
+                        "api_status": "online",
+                        "database_engine": DATABASE_ENGINE,
+                        "active_accounts": int(conn.execute("SELECT COUNT(*) FROM users WHERE active = 1").fetchone()[0]),
+                        "employees_without_stylist": int(conn.execute("SELECT COUNT(*) FROM users WHERE role = 'employee' AND active = 1 AND (stylist_id = '' OR stylist_id IS NULL)").fetchone()[0]),
+                        "low_stock_items": int(conn.execute("SELECT COUNT(*) FROM catalog_items WHERE active = 1 AND kind = 'product' AND stock_qty <= 2").fetchone()[0]),
+                        "open_support_requests": int(conn.execute("SELECT COUNT(*) FROM support_requests WHERE status != 'resolved'").fetchone()[0]),
+                        "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
+                    }
+                    self._send_json(200, diagnostics)
+                    return
+
                 if path == "/api/settings/business":
                     if user["role"] != "admin":
                         self._send_json(403, {"error": "Administrator access is required."})
@@ -1974,7 +1999,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                     )
 
                 user = None if rate_limited or not email or len(email) > 254 or "@" not in email else conn.execute(
-                    "SELECT id, email, username, name, role FROM users WHERE lower(email) = ? AND active = 1",
+                    "SELECT id, email, username, name, role, is_superadmin FROM users WHERE lower(email) = ? AND active = 1",
                     (email,),
                 ).fetchone()
                 if user and not rate_limited:
@@ -2003,7 +2028,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         )
                         conn.commit()
                         destination = user["email"]
-                        role = user["role"]
+                        role = "superadmin" if user["is_superadmin"] else user["role"]
                         created = True
                 conn.commit()
             finally:
@@ -2143,8 +2168,8 @@ class SalonHandler(BaseHTTPRequestHandler):
                     now_iso = datetime.datetime.now().isoformat(timespec="seconds")
                     conn.execute(
                         """
-                        INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, role, active, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin', 1, ?)
+                        INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, role, is_superadmin, active, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin', 1, 1, ?)
                         """,
                         (user_id, name, username, email, password_salt, password_digest, pin_salt, pin_digest, now_iso),
                     )
@@ -2182,8 +2207,8 @@ class SalonHandler(BaseHTTPRequestHandler):
                     ).fetchone()
                     valid_credential = bool(
                         user
-                        and expected_role in ("admin", "employee")
-                        and user["role"] == expected_role
+                        and expected_role in ("superadmin", "admin", "employee")
+                        and _public_user(user)["role"] == expected_role
                         and password
                         and _credential_matches(password, user["password_salt"], user["password_hash"])
                     )

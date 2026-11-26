@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { CheckCircle2, ClipboardCheck, Clock3, Plus, RotateCcw } from 'lucide-react';
-import type { StaffTask, StaffTaskStatus, StaffUser } from '../types';
+import { isAdminRole, type StaffTask, type StaffTaskStatus, type StaffUser } from '../types';
 import { salonApi } from '../api/client';
 
 function taskStatusLabel(status: StaffTaskStatus): string {
@@ -8,7 +8,7 @@ function taskStatusLabel(status: StaffTaskStatus): string {
 }
 
 export function TasksView({ user }: { user: StaffUser }) {
-  const isAdmin = user.role === 'admin';
+  const isAdmin = isAdminRole(user.role);
   const [tasks, setTasks] = useState<StaffTask[]>([]);
   const [employees, setEmployees] = useState<StaffUser[]>([]);
   const [title, setTitle] = useState('');

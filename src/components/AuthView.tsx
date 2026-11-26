@@ -45,7 +45,7 @@ export function AuthView({
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!role) return;
-    if (setupRequired && role === 'admin') {
+    if (setupRequired && role === 'superadmin') {
       onSetup({ name, username, email, password });
     } else {
       onLogin({ username, password, role });
@@ -91,14 +91,14 @@ export function AuthView({
     }
   };
 
-  const roleLabel = role === 'admin' ? 'Admin' : 'Employee';
+  const roleLabel = role === 'superadmin' ? 'Superadmin' : role === 'admin' ? 'Admin' : 'Employee';
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-transparent p-4">
       <section className="salon-card w-full max-w-xl rounded-3xl p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#3B82F6] to-[#0B5ED7] text-white">
-            {setupRequired && role === 'admin' ? <Crown className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
+            {setupRequired && role === 'superadmin' ? <Crown className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
           </span>
           <div>
             <p className="font-serif-editorial text-xl font-semibold text-[#14213D]">
@@ -145,6 +145,7 @@ export function AuthView({
             )}
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               {([
+                ['superadmin', setupRequired ? 'Set Up Superadmin' : 'Superadmin Login', 'Owner access for maintenance and troubleshooting.'],
                 ['admin', 'Admin Login', 'Manage salon operations, services, sales, and staff.'],
                 ['employee', 'Employee Login', 'Open your employee workspace and assigned schedule.'],
               ] as const).map(([targetRole, title, description]) => (
@@ -162,14 +163,14 @@ export function AuthView({
                     <ArrowRight className="h-4 w-4 text-[#0B5ED7] transition-transform group-hover:translate-x-1" />
                   </span>
                   <span className="mt-2 block text-xs leading-5 text-[#64748B]">{description}</span>
-                  {targetRole === 'admin' && setupRequired && (
+                  {targetRole === 'superadmin' && setupRequired && (
                     <span className="mt-3 block text-[10px] font-bold uppercase tracking-wide text-[#0B5ED7]">
-                      First-time setup
+                      Set up owner account
                     </span>
                   )}
                   {targetRole === 'employee' && setupRequired && (
                     <span className="mt-3 block text-[10px] font-bold uppercase tracking-wide text-[#64748B]">
-                      Admin setup required first
+                      Superadmin setup required first
                     </span>
                   )}
                 </a>
@@ -183,8 +184,8 @@ export function AuthView({
                 ? 'Reset your password'
                 : recoveryMode === 'reset'
                   ? 'Choose a new password'
-                  : setupRequired && role === 'admin'
-                    ? 'Set up the Owner / Admin account'
+                  : setupRequired && role === 'superadmin'
+                    ? 'Set up the Superadmin account'
                     : `${roleLabel} sign in`}
             </h1>
             <p className="mt-1 text-sm text-[#64748B]">
@@ -192,8 +193,8 @@ export function AuthView({
                 ? 'Enter the email address on your staff account. If it matches an active account, we will send a reset link.'
                 : recoveryMode === 'reset'
                   ? 'Choose a new password with at least 10 characters.'
-                  : setupRequired && role === 'admin'
-                ? 'Create the first Admin account. You can add Employee accounts afterward.'
+                  : setupRequired && role === 'superadmin'
+                ? 'Create the salon owner account. You can add Admin and Employee accounts afterward.'
                 : setupRequired
                   ? 'The Owner / Admin account must be set up before Employees can sign in.'
                   : 'Use your assigned username and password.'}
@@ -205,8 +206,8 @@ export function AuthView({
             )}
             {demoMode && !setupRequired && (
               <p className="mt-3 rounded-lg border border-[#DDE6F1] bg-white px-3 py-2 text-xs text-[#64748B]">
-                Development sign-in: {role === 'admin' ? (
-                  <>Admin <strong>admin / 0000</strong></>
+                Development sign-in: {role === 'superadmin' || role === 'admin' ? (
+                  <>Superadmin <strong>admin / 0000</strong></>
                 ) : (
                   <>Employee <strong>test / 11111</strong></>
                 )}
@@ -252,6 +253,11 @@ export function AuthView({
                 </button>
                 {!resetToken && <p className="text-xs text-[#B91C1C]">This reset link is missing its token. Request a new link.</p>}
               </form>
+            ) : setupRequired && role === 'admin' ? (
+              <div className="mt-6 rounded-lg border border-[#DDE6F1] bg-white px-3 py-3 text-xs text-[#64748B]">
+                Create the Superadmin owner account before using the Admin workspace.
+                <button type="button" onClick={() => onNavigate('/superadmin')} className="ml-1 font-semibold text-[#0B5ED7] underline underline-offset-2">Set up Superadmin</button>
+              </div>
             ) : setupRequired && role === 'employee' ? (
               <p className="mt-6 rounded-lg border border-[#DDE6F1] bg-white px-3 py-2 text-xs text-[#64748B]">
                 Employee sign-in will be available after the administrator completes setup.
@@ -329,7 +335,7 @@ export function AuthView({
                   disabled={busy}
                   className="h-12 w-full rounded-xl bg-gradient-to-r from-[#0D6EFD] to-[#0B5ED7] text-sm font-bold text-white disabled:opacity-60"
                 >
-                  {busy ? 'Please wait…' : setupRequired ? 'Create Admin Account' : `Sign in to ${roleLabel} workspace`}
+                  {busy ? 'Please wait…' : setupRequired && role === 'superadmin' ? 'Create Superadmin Account' : `Sign in to ${roleLabel} workspace`}
                 </button>
                 {!setupRequired && !demoMode && (
                   <button type="button" onClick={() => { setRecoveryMode('request'); setRecoveryError(''); setRecoveryMessage(''); }} className="w-full text-center text-xs font-semibold text-[#0B5ED7] underline underline-offset-2">
@@ -362,7 +368,7 @@ export function AuthView({
             >
               Choose workspace
             </a>
-            {!setupRequired && role === 'admin' && (
+            {!setupRequired && (role === 'admin' || role === 'superadmin') && (
               <a
                 href="/employee"
                 onClick={(event) => {

@@ -20,11 +20,16 @@ export type WorkspaceTab =
   | 'settings'
   | 'system-logs'
   | 'backups'
+  | 'superadmin'
   | 'loyalty'
   | 'expenses'
   | 'support';
 
-export type StaffRole = 'admin' | 'employee';
+export type StaffRole = 'superadmin' | 'admin' | 'employee';
+
+export function isAdminRole(role: StaffRole): boolean {
+  return role === 'admin' || role === 'superadmin';
+}
 
 export interface StaffUser {
   id: string;

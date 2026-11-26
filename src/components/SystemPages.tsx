@@ -23,6 +23,7 @@ import type {
   SupportRequestStatus,
   WorkspaceTab,
 } from '../types';
+import { isAdminRole } from '../types';
 import { salonApi } from '../api/client';
 
 type SystemPageTab = Extract<WorkspaceTab, 'settings' | 'system-logs' | 'backups' | 'support'>;
@@ -156,7 +157,7 @@ function SettingsPage({
         {saveError && <p role="alert" className="text-xs font-semibold text-red-700">{saveError}</p>}
         {saveNotice && <p role="status" className="flex items-center gap-2 text-xs font-semibold text-green-700"><CheckCircle2 className="h-4 w-4" />{saveNotice}</p>}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E1E7F0] pt-4">
-          <p className="text-[11px] text-[#667085]">Signed in as {user.name} (@{user.username}) · {user.role === 'admin' ? 'Administrator' : 'Employee'} · Business date {date}</p>
+          <p className="text-[11px] text-[#667085]">Signed in as {user.name} (@{user.username}) · {user.role === 'superadmin' ? 'Superadmin' : isAdminRole(user.role) ? 'Administrator' : 'Employee'} · Business date {date}</p>
           <button type="submit" disabled={saving} className="inline-flex h-10 items-center justify-center rounded-lg bg-[#0D6EFD] px-4 text-xs font-bold text-white hover:bg-[#0B5ED7] disabled:opacity-60">
             {saving ? 'Saving…' : 'Save business profile'}
           </button>
@@ -425,7 +426,7 @@ function SupportPage({ user, businessSettings }: Pick<SystemPagesProps, 'user' |
 
   return (
     <div className="space-y-5">
-      <PageHeading eyebrow="Help center" title="Support & help" description={user.role === 'admin' ? 'Review staff requests, respond, and track resolution.' : 'Find guidance or send a request to the salon administrator.'} />
+      <PageHeading eyebrow="Help center" title="Support & help" description={isAdminRole(user.role) ? 'Review staff requests, respond, and track resolution.' : 'Find guidance or send a request to the salon administrator.'} />
       <p className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 text-xs text-[#1E40AF]">
         Requests are saved in this workspace and visible to administrators. No external email or service-desk integration is configured.
         {(businessSettings.phone || businessSettings.email) && <span className="mt-1 block">Business contact: {[businessSettings.phone, businessSettings.email].filter(Boolean).join(' · ')}</span>}
@@ -457,13 +458,13 @@ function SupportPage({ user, businessSettings }: Pick<SystemPagesProps, 'user' |
 
       <section className="salon-card space-y-4 rounded-2xl p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3">
-          <div><h2 className="text-sm font-bold text-[#14213D]">{user.role === 'admin' ? 'Support inbox' : 'My support requests'}</h2><p className="mt-1 text-xs text-[#667085]">{requests.length} request{requests.length === 1 ? '' : 's'}</p></div>
+          <div><h2 className="text-sm font-bold text-[#14213D]">{isAdminRole(user.role) ? 'Support inbox' : 'My support requests'}</h2><p className="mt-1 text-xs text-[#667085]">{requests.length} request{requests.length === 1 ? '' : 's'}</p></div>
           <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="h-9 rounded-lg border border-[#DDE6F1] bg-white px-3 text-xs font-bold text-[#475467] hover:bg-[#F4F7FC]">Refresh</button>
         </div>
         {loadError && <p role="alert" className="text-xs font-semibold text-red-700">{loadError}</p>}
         {loading ? <p className="py-8 text-center text-xs text-[#667085]">Loading requests…</p> : requests.length ? (
           <div className="space-y-3">
-            {requests.map((request) => <SupportRequestCard key={request.id} request={request} canManage={user.role === 'admin'} onSaved={updateRequestInList} />)}
+            {requests.map((request) => <SupportRequestCard key={request.id} request={request} canManage={isAdminRole(user.role)} onSaved={updateRequestInList} />)}
           </div>
         ) : <p className="py-8 text-center text-xs text-[#667085]">No support requests yet.</p>}
       </section>

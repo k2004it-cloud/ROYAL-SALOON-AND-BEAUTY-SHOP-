@@ -64,6 +64,17 @@ export function offsetIsoDate(baseIso: string, deltaDays: number): string {
 }
 
 export const salonApi = {
+  superadminDiagnostics(): Promise<{
+    api_status: string;
+    database_engine: string;
+    active_accounts: number;
+    employees_without_stylist: number;
+    low_stock_items: number;
+    open_support_requests: number;
+    checked_at: string;
+  }> {
+    return apiRequest('/api/superadmin/diagnostics');
+  },
   listExpenses(): Promise<{ expenses: SalonExpense[] }> {
     return apiRequest('/api/expenses');
   },
@@ -84,7 +95,7 @@ export const salonApi = {
     return apiRequest('/api/auth/setup', { method: 'POST', body: JSON.stringify(payload) });
   },
 
-  login(payload: { username: string; password: string; role: 'admin' | 'employee' }): Promise<{ user: StaffUser }> {
+  login(payload: { username: string; password: string; role: 'superadmin' | 'admin' | 'employee' }): Promise<{ user: StaffUser }> {
     return apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
   },
 
