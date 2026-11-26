@@ -12,7 +12,6 @@ import {
   UsersRound,
   CalendarCheck,
   Banknote,
-  Sparkles,
 } from 'lucide-react';
 import type {
   Appointment,
@@ -268,7 +267,7 @@ export function ScheduleView({
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#DCEBFF]">
-              <Sparkles className="h-3.5 w-3.5" />
+              <img src="/royal-salon-logo.png" alt="Royal Salon logo" className="h-9 w-9 rounded-md bg-black object-contain" />
               Royal Saloon & Beauty Hub
             </div>
             <h2 className="font-serif-editorial text-2xl font-semibold sm:text-3xl">

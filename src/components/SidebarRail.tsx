@@ -9,7 +9,6 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
-  Crown,
   WalletCards,
   ClipboardCheck,
   Bell,
@@ -132,9 +131,7 @@ export function SidebarRail({
           <div className="flex items-center justify-between px-5 h-[78px] border-b border-white/10">
             {!collapsed ? (
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="h-9 w-9 rounded-full border border-[#B7D2FF]/60 bg-white/10 flex items-center justify-center text-[#F4B629] shrink-0">
-                  <Crown className="h-4 w-4" />
-                </span>
+                <img src="/royal-salon-logo.png" alt="Royal Salon logo" className="h-10 w-10 rounded-lg bg-black object-contain shrink-0" />
                 <div className="min-w-0">
                   <span className="block max-w-full truncate font-serif-editorial text-lg font-semibold italic leading-none text-[#F4B629]">
                     {businessName}
@@ -145,9 +142,7 @@ export function SidebarRail({
                 </div>
               </div>
             ) : (
-              <span className="font-serif-editorial text-xl font-semibold text-white mx-auto">
-                SP
-              </span>
+              <img src="/royal-salon-logo.png" alt="Royal Salon logo" className="mx-auto h-10 w-10 rounded-lg bg-black object-contain" />
             )}
             {!collapsed && (
               <button
@@ -239,7 +234,7 @@ export function SidebarRail({
         <aside role="dialog" aria-modal="true" aria-label="Workspace navigation" className="relative flex h-full w-[min(86vw,300px)] flex-col text-[#F4F7FC] shadow-2xl beauty-sidebar">
           <div className="flex h-[72px] items-center justify-between border-b border-white/10 px-4">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#B7D2FF]/60 bg-white/10 text-[#F4B629]"><Crown className="h-4 w-4" /></span>
+              <img src="/royal-salon-logo.png" alt="Royal Salon logo" className="h-10 w-10 shrink-0 rounded-lg bg-black object-contain" />
               <div className="min-w-0"><span className="block truncate font-serif-editorial text-base font-semibold italic text-[#F4B629]">{businessName}</span><span className="mt-0.5 block text-[9px] uppercase tracking-[0.18em] text-[#B7D2FF]">Beauty & Atelier</span></div>
             </div>
             <button type="button" aria-label="Close navigation menu" onClick={onCloseMobile} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#D5E4FF]/80 hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>

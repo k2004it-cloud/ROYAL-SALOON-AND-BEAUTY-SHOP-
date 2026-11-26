@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Crown, LockKeyhole, RefreshCw } from 'lucide-react';
+import { ArrowRight, RefreshCw } from 'lucide-react';
 import { salonApi } from '../api/client';
 import type { StaffRole } from '../types';
 
@@ -102,9 +102,7 @@ export function AuthView({
     <main className="min-h-screen flex items-center justify-center bg-transparent p-4">
       <section className="salon-card w-full max-w-xl rounded-3xl p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#3B82F6] to-[#0B5ED7] text-white">
-            {roleSetupRequired && role === 'superadmin' ? <Crown className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
-          </span>
+          <img src="/royal-salon-logo.png" alt="Royal Salon logo" className="h-12 w-12 shrink-0 rounded-xl bg-black object-contain" />
           <div>
             <p className="font-serif-editorial text-xl font-semibold text-[#14213D]">
               Royal Saloon
