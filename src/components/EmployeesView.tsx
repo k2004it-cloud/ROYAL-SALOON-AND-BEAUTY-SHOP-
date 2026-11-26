@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { KeyRound, Plus, UserRound, UserRoundX, X } from 'lucide-react';
-import type { StaffUser, Stylist } from '../types';
+import type { StaffUser } from '../types';
 import { salonApi } from '../api/client';
 
 interface EmployeesViewProps {
   onNotify: (message: string) => void;
   demoMode: boolean;
-  stylists: Stylist[];
   isSuperadmin?: boolean;
 }
 
-export function EmployeesView({ onNotify, demoMode, stylists, isSuperadmin = false }: EmployeesViewProps) {
+export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: EmployeesViewProps) {
   const [employees, setEmployees] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -18,6 +17,7 @@ export function EmployeesView({ onNotify, demoMode, stylists, isSuperadmin = fal
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [jobTitle, setJobTitle] = useState('');
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -54,12 +54,13 @@ export function EmployeesView({ onNotify, demoMode, stylists, isSuperadmin = fal
     setError('');
     setSaving(true);
     try {
-      await salonApi.createEmployee({ name, username, email, phone, password });
+      await salonApi.createEmployee({ name, username, email, phone, job_title: jobTitle, password });
       setModalOpen(false);
       setName('');
       setUsername('');
       setEmail('');
       setPhone('');
+      setJobTitle('');
       setPassword('');
       await loadEmployees();
       onNotify('Employee account created');
@@ -78,17 +79,6 @@ export function EmployeesView({ onNotify, demoMode, stylists, isSuperadmin = fal
       onNotify(employee.active ? 'Employee access disabled' : 'Employee access restored');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update employee access.');
-    }
-  };
-
-  const handleAssignStylist = async (employee: StaffUser, assignedStylistId: string) => {
-    setError('');
-    try {
-      await salonApi.updateEmployee(employee.id, { stylist_id: assignedStylistId });
-      await loadEmployees();
-      onNotify('Employee stylist profile updated');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to assign the stylist profile.');
     }
   };
 
@@ -153,18 +143,7 @@ export function EmployeesView({ onNotify, demoMode, stylists, isSuperadmin = fal
                   <p className="truncate text-xs font-semibold text-[#0B5ED7]">@{employee.username}</p>
                   <p className="truncate text-xs text-[#64748B]">{employee.email}</p>
                   <p className="truncate text-xs text-[#64748B]">{employee.phone || 'Phone not added'}</p>
-                  <p className="mt-1 text-[10px] font-semibold text-[#475467]">
-                    Stylist profile: {stylists.find((stylist) => stylist.id === employee.stylist_id)?.name || 'Not assigned'}
-                  </p>
-                  <select
-                    aria-label={'Stylist profile for ' + employee.name}
-                    value={employee.stylist_id || ''}
-                    onChange={(event) => void handleAssignStylist(employee, event.target.value)}
-                    className="mt-2 h-9 max-w-56 rounded-lg border border-[#DDE6F1] bg-white px-2 text-xs text-[#14213D]"
-                  >
-                    <option value="" disabled>Select stylist profile</option>
-                    {stylists.map((stylist) => <option key={stylist.id} value={stylist.id}>{stylist.name} · {stylist.role}</option>)}
-                  </select>
+                  <p className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">{employee.job_title || 'Employee'}</p>
                   <p className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-[#0B5ED7]">
                     <KeyRound className="h-3 w-3" />
                     Username & password access
@@ -212,6 +191,10 @@ export function EmployeesView({ onNotify, demoMode, stylists, isSuperadmin = fal
                 <input id="employee-name" value={name} onChange={(event) => setName(event.target.value)} required className="salon-input w-full px-3 text-sm" />
               </div>
               <div>
+                <label htmlFor="employee-job-title" className="mb-1.5 block text-xs font-semibold text-[#344054]">Employee position / role</label>
+                <input id="employee-job-title" value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} minLength={2} maxLength={80} placeholder="e.g. Hair Stylist, Nail Technician, Receptionist" required className="salon-input w-full px-3 text-sm" />
+              </div>
+              <div>
                 <label htmlFor="employee-username" className="mb-1.5 block text-xs font-semibold text-[#344054]">Username</label>
                 <input id="employee-username" autoComplete="off" minLength={3} maxLength={30} pattern={'[A-Za-z0-9._\\-]{3,30}'} value={username} onChange={(event) => setUsername(event.target.value)} required className="salon-input w-full px-3 text-sm" />
               </div>
@@ -227,7 +210,7 @@ export function EmployeesView({ onNotify, demoMode, stylists, isSuperadmin = fal
                 <label htmlFor="employee-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Temporary password (10+ characters)</label>
                 <input id="employee-password" type="password" autoComplete="new-password" minLength={10} value={password} onChange={(event) => setPassword(event.target.value)} required className="salon-input w-full px-3 text-sm" />
               </div>
-              <p className="text-xs text-[#667085]">You can assign a stylist profile to this account from the employee list after it is created.</p>
+              <p className="text-xs text-[#667085]">Appointments and service commissions will be linked to this employee account and position.</p>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)} className="h-11 rounded-lg border border-[#E1E7F0] px-4 text-sm font-semibold text-[#14213D]">
                   Cancel

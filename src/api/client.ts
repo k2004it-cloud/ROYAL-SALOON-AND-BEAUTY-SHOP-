@@ -120,7 +120,7 @@ export const salonApi = {
     return apiRequest('/api/employees');
   },
 
-  createEmployee(payload: { name: string; username: string; email: string; phone: string; password: string; stylist_id?: string }): Promise<{ employee: StaffUser }> {
+  createEmployee(payload: { name: string; username: string; email: string; phone: string; job_title: string; password: string }): Promise<{ employee: StaffUser }> {
     return apiRequest('/api/employees', { method: 'POST', body: JSON.stringify(payload) });
   },
 
@@ -140,7 +140,7 @@ export const salonApi = {
     return apiRequest(`/api/superadmin/admins/${encodeURIComponent(id)}/reset-password`, { method: 'POST', body: JSON.stringify({}) });
   },
 
-  updateEmployee(id: string, payload: { active?: boolean; stylist_id?: string }): Promise<{ employee: StaffUser }> {
+  updateEmployee(id: string, payload: { active?: boolean }): Promise<{ employee: StaffUser }> {
     return apiRequest(`/api/employees/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
@@ -349,6 +349,7 @@ export const salonApi = {
     name: string;
     description?: string;
     price_ksh: number;
+    commission_rate?: number;
     duration_min?: number;
     stock_qty?: number;
     sku?: string;
@@ -369,6 +370,7 @@ export const salonApi = {
       duration_min: number;
       stock_qty: number;
       stock_delta: number;
+      commission_rate: number;
     }>
   ): Promise<{ item: CatalogItem }> {
     return apiRequest(`/api/catalog/${encodeURIComponent(id)}`, {

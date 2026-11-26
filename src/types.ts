@@ -38,6 +38,7 @@ export interface StaffUser {
   username: string;
   email: string;
   phone?: string;
+  job_title?: string;
   stylist_id?: string;
   role: StaffRole;
   active: boolean;
@@ -232,6 +233,7 @@ export interface CatalogItem {
   name: string;
   description: string;
   price_ksh: number;
+  commission_rate: number;
   duration_min: number;
   stock_qty: number;
   sku: string;

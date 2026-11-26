@@ -512,12 +512,19 @@ export default function App() {
     name: string;
     description: string;
     price_ksh: number;
+    commission_rate?: number;
     duration_min: number;
     stock_qty: number;
   }) => {
     await salonApi.createCatalogItem(payload);
     await refreshData(businessDate);
     showToast('Catalog updated');
+  };
+
+  const handleUpdateServiceCommission = async (id: string, commission_rate: number) => {
+    await salonApi.updateCatalogItem(id, { commission_rate });
+    await refreshData(businessDate);
+    showToast('Service commission rate updated');
   };
 
   const handleAdjustStock = async (id: string, stockDelta: number) => {
@@ -856,7 +863,7 @@ export default function App() {
           {activeTab === 'employees' && isAdminRole(authUser.role) && (
             <div className="space-y-6">
               {authUser.role === 'superadmin' && <AdminAccountsView onNotify={showToast} />}
-              <EmployeesView onNotify={showToast} demoMode={demoMode} stylists={data.stylists} isSuperadmin={authUser.role === 'superadmin'} />
+              <EmployeesView onNotify={showToast} demoMode={demoMode} isSuperadmin={authUser.role === 'superadmin'} />
             </div>
           )}
 
@@ -913,6 +920,7 @@ export default function App() {
               initialTab="service"
               catalog={data.catalog}
               onCreateItem={handleCreateCatalogItem}
+              onUpdateCommissionRate={handleUpdateServiceCommission}
               onAdjustStock={handleAdjustStock}
             />
           )}
@@ -923,6 +931,7 @@ export default function App() {
                 initialTab="product"
                 catalog={data.catalog}
                 onCreateItem={handleCreateCatalogItem}
+                onUpdateCommissionRate={handleUpdateServiceCommission}
                 onAdjustStock={handleAdjustStock}
               />
               <InventoryReportsView />

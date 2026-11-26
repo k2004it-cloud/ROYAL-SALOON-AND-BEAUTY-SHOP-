@@ -13,9 +13,11 @@ interface CatalogViewProps {
     name: string;
     description: string;
     price_ksh: number;
+    commission_rate?: number;
     duration_min: number;
     stock_qty: number;
   }) => Promise<void>;
+  onUpdateCommissionRate: (id: string, commissionRate: number) => Promise<void>;
   onAdjustStock: (id: string, stockDelta: number) => Promise<void>;
 }
 
@@ -30,6 +32,7 @@ export function CatalogView({
   initialTab = 'service',
   catalog,
   onCreateItem,
+  onUpdateCommissionRate,
   onAdjustStock,
 }: CatalogViewProps) {
   const [tab, setTab] = useState<'service' | 'product'>(initialTab);
@@ -41,6 +44,10 @@ export function CatalogView({
   const [description, setDescription] = useState('');
   const [priceKsh, setPriceKsh] = useState('3500');
   const [durationMin, setDurationMin] = useState('60');
+  const [commissionRate, setCommissionRate] = useState('35');
+  const [commissionDrafts, setCommissionDrafts] = useState<Record<string, string>>({});
+  const [savingCommissionFor, setSavingCommissionFor] = useState('');
+  const [commissionError, setCommissionError] = useState('');
   const [stockQty, setStockQty] = useState('12');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -62,6 +69,7 @@ export function CatalogView({
     setDescription('');
     setPriceKsh('3500');
     setDurationMin('60');
+    setCommissionRate('35');
     setStockQty('12');
     setFormError('');
     setModalOpen(true);
@@ -78,6 +86,7 @@ export function CatalogView({
         name,
         description,
         price_ksh: Number(priceKsh),
+        commission_rate: kind === 'service' ? Number(commissionRate) : undefined,
         duration_min: kind === 'service' ? Number(durationMin) : 0,
         stock_qty: kind === 'product' ? Number(stockQty) : 0,
       });
@@ -87,6 +96,24 @@ export function CatalogView({
       setFormError(err instanceof Error ? err.message : 'Unable to add item.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveCommissionRate = async (item: CatalogItem) => {
+    const rate = Number(commissionDrafts[item.id] ?? item.commission_rate * 100);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100) {
+      setCommissionError('Service commission must be between 0 and 100%.');
+      return;
+    }
+    setCommissionError('');
+    setSavingCommissionFor(item.id);
+    try {
+      await onUpdateCommissionRate(item.id, rate);
+      setCommissionDrafts((current) => ({ ...current, [item.id]: String(rate) }));
+    } catch (error) {
+      setCommissionError(error instanceof Error ? error.message : 'Unable to update service commission.');
+    } finally {
+      setSavingCommissionFor('');
     }
   };
 
@@ -165,6 +192,8 @@ export function CatalogView({
         </button>
       </div>
 
+      {commissionError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{commissionError}</p>}
+
       {/* Table */}
       <div className="salon-card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
@@ -178,6 +207,7 @@ export function CatalogView({
                   {tab === 'service' ? 'Duration' : 'On Hand'}
                 </th>
                 <th className="py-3.5 px-5 text-right">Unit Price</th>
+                {tab === 'service' && <th className="py-3.5 px-5 text-right">Commission</th>}
                 {tab === 'product' && <th className="py-3.5 px-5 text-right">Adjust Stock</th>}
               </tr>
             </thead>
@@ -209,6 +239,13 @@ export function CatalogView({
                     <td className="py-3.5 px-5 text-right tabular-ksh font-bold text-[#14213D] whitespace-nowrap">
                       {formatKsh(item.price_ksh)}
                     </td>
+                    {tab === 'service' && <td className="py-3 px-5 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end gap-2">
+                        <input aria-label={`Commission rate for ${item.name}`} type="number" min="0" max="100" step="0.1" value={commissionDrafts[item.id] ?? String(Number((item.commission_rate * 100).toFixed(2)))} onChange={(event) => setCommissionDrafts((current) => ({ ...current, [item.id]: event.target.value }))} className="salon-input h-9 w-24 px-2 text-right text-xs" />
+                        <span className="text-xs text-[#64748B]">%</span>
+                        <button type="button" onClick={() => void saveCommissionRate(item)} disabled={savingCommissionFor === item.id} className="h-9 rounded-lg border border-[#DDE6F1] px-3 text-[10px] font-bold text-[#0B5ED7] disabled:opacity-50">{savingCommissionFor === item.id ? 'Saving…' : 'Save'}</button>
+                      </div>
+                    </td>}
                     {tab === 'product' && (
                       <td className="py-3.5 px-5 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
@@ -320,6 +357,12 @@ export function CatalogView({
                   </select>
                 </div>
               )}
+
+              {kind === 'service' && <div>
+                <label className="block text-xs font-semibold text-[#344054] mb-1.5">Employee commission (%)</label>
+                <input type="number" min="0" max="100" step="0.1" value={commissionRate} onChange={(event) => setCommissionRate(event.target.value)} required className="salon-input w-full px-3 text-sm text-[#14213D]" />
+                <p className="mt-1 text-[10px] text-[#64748B]">Commission is calculated automatically for the employee assigned to each paid service.</p>
+              </div>}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

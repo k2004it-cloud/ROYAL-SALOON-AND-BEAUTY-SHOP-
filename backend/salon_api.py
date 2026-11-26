@@ -223,6 +223,7 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 username TEXT NOT NULL DEFAULT '',
                 email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                job_title TEXT NOT NULL DEFAULT '',
                 password_salt TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 pin_salt TEXT NOT NULL,
@@ -341,6 +342,7 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 description TEXT NOT NULL DEFAULT '',
                 price_ksh INTEGER NOT NULL,
+                commission_rate REAL NOT NULL DEFAULT 0.35,
                 duration_min INTEGER NOT NULL DEFAULT 0,
                 stock_qty INTEGER NOT NULL DEFAULT 0,
                 sku TEXT NOT NULL DEFAULT '',
@@ -504,6 +506,9 @@ def init_db() -> None:
             """
         )
 
+        catalog_columns = {row["name"] for row in cur.execute("PRAGMA table_info(catalog_items)")}
+        if "commission_rate" not in catalog_columns:
+            cur.execute("ALTER TABLE catalog_items ADD COLUMN commission_rate REAL NOT NULL DEFAULT 0.35")
         client_columns = {row["name"] for row in cur.execute("PRAGMA table_info(clients)")}
         if "loyalty_points" not in client_columns:
             cur.execute("ALTER TABLE clients ADD COLUMN loyalty_points INTEGER NOT NULL DEFAULT 0")
@@ -544,6 +549,8 @@ def init_db() -> None:
             cur.execute("ALTER TABLE users ADD COLUMN stylist_id TEXT NOT NULL DEFAULT ''")
         if "phone" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''")
+        if "job_title" not in user_columns:
+            cur.execute("ALTER TABLE users ADD COLUMN job_title TEXT NOT NULL DEFAULT ''")
         if "is_superadmin" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN is_superadmin INTEGER NOT NULL DEFAULT 0")
         cur.execute("CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
@@ -552,6 +559,19 @@ def init_db() -> None:
             # subsequently token-created Superadmin accounts across restarts.
             cur.execute("UPDATE users SET is_superadmin = 0 WHERE role = 'admin'")
             cur.execute("INSERT INTO app_migrations (name, applied_at) VALUES ('separate_superadmin_from_admin', ?)", (datetime.datetime.now().isoformat(timespec="seconds"),))
+        if not cur.execute("SELECT 1 FROM app_migrations WHERE name = 'employee_positions_and_profiles'").fetchone():
+            employees = cur.execute("SELECT id, name, job_title, stylist_id, active FROM users WHERE role = 'employee'").fetchall()
+            for employee in employees:
+                linked_profile = cur.execute("SELECT role FROM stylists WHERE id = ?", (employee["stylist_id"],)).fetchone() if employee["stylist_id"] else None
+                job_title = (employee["job_title"] or (linked_profile["role"] if linked_profile else "") or "Employee").strip()
+                profile_id = employee["stylist_id"] if linked_profile else employee["id"]
+                if not linked_profile:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO stylists (id, name, role, specialty, avatar_url, commission_rate, active) VALUES (?, ?, ?, ?, '', 0.35, ?)",
+                        (profile_id, employee["name"], job_title, job_title, employee["active"]),
+                    )
+                cur.execute("UPDATE users SET job_title = ?, stylist_id = ? WHERE id = ?", (job_title, profile_id, employee["id"]))
+            cur.execute("INSERT INTO app_migrations (name, applied_at) VALUES ('employee_positions_and_profiles', ?)", (datetime.datetime.now().isoformat(timespec="seconds"),))
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_single_superadmin ON users(is_superadmin) WHERE is_superadmin = 1")
 
         used_usernames: set[str] = set()
@@ -706,18 +726,18 @@ def _ensure_demo_users(conn: sqlite3.Connection) -> None:
             conn.execute(
                 """
                 UPDATE users
-                SET name = ?, email = ?, stylist_id = ?, role = ?, is_superadmin = ?, active = 1
+                SET name = ?, email = ?, stylist_id = ?, role = ?, job_title = ?, is_superadmin = ?, active = 1
                 WHERE username = ?
                 """,
-                (name, email, stylist_id, role, 0, username),
+                (name, email, stylist_id, role, "Stylist" if role == "employee" else "", 0, username),
             )
             continue
         password_salt, password_digest = _credential_hash(password)
         pin_salt, pin_digest = _credential_hash(secrets.token_urlsafe(32))
         conn.execute(
             """
-            INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, stylist_id, role, is_superadmin, active, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            INSERT INTO users (id, name, username, email, password_salt, password_hash, pin_salt, pin_hash, stylist_id, job_title, role, is_superadmin, active, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?)
             """,
             (
                 user_id,
@@ -729,8 +749,8 @@ def _ensure_demo_users(conn: sqlite3.Connection) -> None:
                 pin_salt,
                 pin_digest,
                 stylist_id,
+                "Stylist" if role == "employee" else "",
                 role,
-                0,
                 now_iso,
             ),
         )
@@ -743,6 +763,7 @@ def _public_user(row: sqlite3.Row | dict) -> dict:
         "username": row["username"],
         "email": row["email"],
         "phone": row["phone"] if "phone" in row.keys() else "",
+        "job_title": row["job_title"] if "job_title" in row.keys() else "",
         "stylist_id": row["stylist_id"] if "stylist_id" in row.keys() else "",
         "role": "superadmin" if ("is_superadmin" in row.keys() and bool(row["is_superadmin"])) else row["role"],
         "active": bool(row["active"]),
@@ -1868,7 +1889,7 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                 if path == "/api/employees":
                     employees = conn.execute(
-                        "SELECT id, name, username, email, phone, stylist_id, role, active, created_at FROM users WHERE role = 'employee' ORDER BY name"
+                        "SELECT id, name, username, email, phone, job_title, stylist_id, role, active, created_at FROM users WHERE role = 'employee' ORDER BY name"
                     ).fetchall()
                     self._send_json(200, {"employees": [_public_user(row) | {"created_at": row["created_at"]} for row in employees]})
                     return
@@ -2054,7 +2075,16 @@ class SalonHandler(BaseHTTPRequestHandler):
         generic_message = "If an active account uses that email, a password reset link will be sent shortly."
         config = _password_reset_config()
         if not config:
-            self._send_json(503, {"error": "Password reset email is not configured. Contact the salon administrator."})
+            self._send_json(
+                503,
+                {
+                    "error": (
+                        "Password reset email is not configured. Set SMTP_HOST, SMTP_USERNAME, "
+                        "SMTP_PASSWORD, SMTP_FROM_EMAIL, and APP_URL in the server environment, "
+                        "then restart or redeploy the app."
+                    )
+                },
+            )
             return
 
         email_value = body.get("email", "")
@@ -2745,13 +2775,20 @@ class SalonHandler(BaseHTTPRequestHandler):
                     username = body.get("username", "").strip().lower()
                     email = body.get("email", "").strip().lower()
                     phone = body.get("phone", "")
+                    job_title = body.get("job_title", "")
                     password = body.get("password", "")
-                    stylist_id = body.get("stylist_id", "").strip()
                     if not isinstance(phone, str) or len(phone.strip()) > 40:
                         self._send_json(400, {"error": "Phone number must be text and 40 characters or fewer."})
                         return
                     phone = phone.strip()
-                    if not name or not USERNAME_PATTERN.fullmatch(username):
+                    if not isinstance(job_title, str) or not 2 <= len(job_title) <= 80:
+                        self._send_json(400, {"error": "Enter the employee's position (2-80 characters)."})
+                        return
+                    job_title = job_title.strip()
+                    if not 2 <= len(job_title) <= 80:
+                        self._send_json(400, {"error": "Enter the employee's position (2-80 characters)."})
+                        return
+                    if not name or len(name) > 120 or not USERNAME_PATTERN.fullmatch(username):
                         self._send_json(400, {"error": "Enter a username with 3-30 letters, numbers, dots, dashes or underscores."})
                         return
                     if "@" not in email:
@@ -2759,18 +2796,6 @@ class SalonHandler(BaseHTTPRequestHandler):
                         return
                     if len(password) < 10:
                         self._send_json(400, {"error": "Password must be at least 10 characters."})
-                        return
-                    if stylist_id and not conn.execute(
-                        "SELECT 1 FROM stylists WHERE id = ? AND active = 1",
-                        (stylist_id,),
-                    ).fetchone():
-                        self._send_json(400, {"error": "Assign this employee to an active stylist profile."})
-                        return
-                    if stylist_id and conn.execute(
-                        "SELECT 1 FROM users WHERE role = 'employee' AND active = 1 AND stylist_id = ?",
-                        (stylist_id,),
-                    ).fetchone():
-                        self._send_json(409, {"error": "That stylist profile is already assigned to an active employee."})
                         return
                     if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
                         self._send_json(409, {"error": "That username is already in use."})
@@ -2781,13 +2806,18 @@ class SalonHandler(BaseHTTPRequestHandler):
                     password_salt, password_digest = _credential_hash(password)
                     pin_salt, pin_digest = _credential_hash(secrets.token_urlsafe(32))
                     employee_id = f"usr-{uuid.uuid4().hex[:12]}"
+                    stylist_id = employee_id
                     now_iso = datetime.datetime.now().isoformat(timespec="seconds")
                     conn.execute(
                         """
-                        INSERT INTO users (id, name, username, email, phone, password_salt, password_hash, pin_salt, pin_hash, stylist_id, role, active, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'employee', 1, ?)
+                        INSERT INTO users (id, name, username, email, phone, job_title, password_salt, password_hash, pin_salt, pin_hash, stylist_id, role, active, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'employee', 1, ?)
                         """,
-                        (employee_id, name, username, email, phone, password_salt, password_digest, pin_salt, pin_digest, stylist_id, now_iso),
+                        (employee_id, name, username, email, phone, job_title, password_salt, password_digest, pin_salt, pin_digest, stylist_id, now_iso),
+                    )
+                    conn.execute(
+                        "INSERT INTO stylists (id, name, role, specialty, avatar_url, commission_rate, active) VALUES (?, ?, ?, ?, '', 0.35, 1)",
+                        (employee_id, name, job_title, job_title),
                     )
                     _record_audit_event(conn, user, "create", "employee", "Employee account created.", employee_id)
                     conn.commit()
@@ -2956,11 +2986,18 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                 if path == "/api/catalog":
                     kind = body.get("kind", "service").strip()
+                    if kind not in {"service", "product"}:
+                        self._send_json(400, {"error": "Choose service or product for the catalog item."})
+                        return
                     category = body.get("category", "Hair & Styling").strip()
                     name = body.get("name", "").strip()
                     price_ksh = int(body.get("price_ksh", 0))
+                    commission_rate = body.get("commission_rate", 35)
                     if not name or price_ksh <= 0:
                         self._send_json(400, {"error": "Item name and a positive price in KSh are required."})
+                        return
+                    if isinstance(commission_rate, bool) or not isinstance(commission_rate, (int, float)) or not 0 <= commission_rate <= 100:
+                        self._send_json(400, {"error": "Service commission must be between 0 and 100 percent."})
                         return
                     item_id = f"{'srv' if kind == 'service' else 'prd'}-{uuid.uuid4().hex[:8]}"
                     duration_min = int(body.get("duration_min", 60 if kind == "service" else 0))
@@ -2968,10 +3005,10 @@ class SalonHandler(BaseHTTPRequestHandler):
                     sku = body.get("sku", "").strip() or f"{'SRV' if kind == 'service' else 'RTL'}-{uuid.uuid4().hex[:4].upper()}"
                     conn.execute(
                         """
-                        INSERT INTO catalog_items (id, kind, category, name, description, price_ksh, duration_min, stock_qty, sku)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO catalog_items (id, kind, category, name, description, price_ksh, commission_rate, duration_min, stock_qty, sku)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (item_id, kind, category, name, body.get("description", "").strip(), price_ksh, duration_min, stock_qty, sku),
+                        (item_id, kind, category, name, body.get("description", "").strip(), price_ksh, float(commission_rate) / 100, duration_min, stock_qty, sku),
                     )
                     _record_audit_event(conn, user, "create", "catalog_item", "Service or product created.", item_id)
                     conn.commit()
@@ -3058,7 +3095,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         sid = user["stylist_id"] if user["role"] == "employee" else (req_item.get("stylist_id", "") or "")
                         s_info = stylists_map.get(sid)
                         s_name = s_info["name"] if s_info else ""
-                        rate = float(s_info["commission_rate"]) if (s_info and cat_row["kind"] == "service") else (0.10 if s_info else 0.0)
+                        rate = float(cat_row["commission_rate"]) if (s_info and cat_row["kind"] == "service") else (0.10 if s_info else 0.0)
                         commission_ksh = round(line_total * rate)
 
                         prepared_items.append(
@@ -3073,6 +3110,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                                 "unit_price_ksh": unit_price,
                                 "line_total_ksh": line_total,
                                 "commission_ksh": commission_ksh,
+                                "commission_rate": float(cat_row["commission_rate"]),
                             }
                         )
 
@@ -3125,7 +3163,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                             # Apply 50% off one unit of the next service and reduce stylist commission accordingly.
                             loyalty_reward_discount_ksh = (reward_item["unit_price_ksh"] + 1) // 2
                             reward_item["line_total_ksh"] = max(0, reward_item["line_total_ksh"] - loyalty_reward_discount_ksh)
-                            reward_item["commission_ksh"] = round(reward_item["line_total_ksh"] * (float(stylists_map.get(reward_item["stylist_id"], {}).get("commission_rate", 0)) if reward_item["stylist_id"] else 0))
+                            reward_item["commission_ksh"] = round(reward_item["line_total_ksh"] * (float(reward_item["commission_rate"]) if reward_item["stylist_id"] else 0))
                         else:
                             reward_redeemed = False
 
@@ -3491,30 +3529,11 @@ class SalonHandler(BaseHTTPRequestHandler):
                         self._send_json(404, {"error": "Employee account not found."})
                         return
                     active = int(bool(body.get("active", employee["active"])))
-                    stylist_id = body.get("stylist_id", employee["stylist_id"])
-                    if not isinstance(stylist_id, str) or not stylist_id or not conn.execute(
-                        "SELECT 1 FROM stylists WHERE id = ? AND active = 1",
-                        (stylist_id,),
-                    ).fetchone():
-                        self._send_json(400, {"error": "Assign this employee to an active stylist profile."})
-                        return
-                    if active and conn.execute(
-                        "SELECT 1 FROM users WHERE role = 'employee' AND active = 1 AND stylist_id = ? AND id != ?",
-                        (stylist_id, employee_id),
-                    ).fetchone():
-                        self._send_json(409, {"error": "That stylist profile is already assigned to another active employee."})
-                        return
-                    conn.execute("UPDATE users SET active = ?, stylist_id = ? WHERE id = ?", (active, stylist_id, employee_id))
+                    conn.execute("UPDATE users SET active = ? WHERE id = ?", (active, employee_id))
+                    conn.execute("UPDATE stylists SET active = ? WHERE id = ?", (active, employee["stylist_id"]))
                     if not active:
                         conn.execute("DELETE FROM sessions WHERE user_id = ?", (employee_id,))
-                    _record_audit_event(
-                        conn,
-                        user,
-                        "activate" if active else "deactivate",
-                        "employee",
-                        "Employee account enabled." if active else "Employee account disabled.",
-                        employee_id,
-                    )
+                    _record_audit_event(conn, user, "activate" if active else "deactivate", "employee", "Employee account enabled." if active else "Employee account disabled.", employee_id)
                     conn.commit()
                     updated = conn.execute("SELECT * FROM users WHERE id = ?", (employee_id,)).fetchone()
                     self._send_json(200, {"employee": _public_user(updated) | {"created_at": updated["created_at"]}})
@@ -3717,6 +3736,16 @@ class SalonHandler(BaseHTTPRequestHandler):
                         return
 
                     stock_delta = body.get("stock_delta")
+                    commission_rate = existing["commission_rate"]
+                    if "commission_rate" in body:
+                        if user["role"] != "admin" or existing["kind"] != "service":
+                            self._send_json(403, {"error": "Only an administrator can change a service commission rate."})
+                            return
+                        requested_rate = body["commission_rate"]
+                        if isinstance(requested_rate, bool) or not isinstance(requested_rate, (int, float)) or not 0 <= requested_rate <= 100:
+                            self._send_json(400, {"error": "Service commission must be between 0 and 100 percent."})
+                            return
+                        commission_rate = float(requested_rate) / 100
                     if user["role"] == "employee" and existing["kind"] != "product":
                         self._send_json(403, {"error": "Employees can only adjust product stock."})
                         return
@@ -3737,7 +3766,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                     conn.execute(
                         """
                         UPDATE catalog_items
-                        SET name = ?, category = ?, description = ?, price_ksh = ?, duration_min = ?, stock_qty = ?
+                        SET name = ?, category = ?, description = ?, price_ksh = ?, commission_rate = ?, duration_min = ?, stock_qty = ?
                         WHERE id = ?
                         """,
                         (
@@ -3745,6 +3774,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                             body.get("category", existing["category"]),
                             body.get("description", existing["description"]),
                             int(body.get("price_ksh", existing["price_ksh"])),
+                            commission_rate,
                             int(body.get("duration_min", existing["duration_min"])),
                             new_stock,
                             item_id,
@@ -3755,7 +3785,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         user,
                         "adjust_stock" if "stock_delta" in body or "stock_qty" in body else "update",
                         "catalog_item",
-                        "Inventory stock adjusted." if "stock_delta" in body or "stock_qty" in body else "Catalog item updated.",
+                        (f"Service commission set to {float(body['commission_rate']):g}%." if "commission_rate" in body else ("Inventory stock adjusted." if "stock_delta" in body or "stock_qty" in body else "Catalog item updated.")),
                         item_id,
                     )
                     conn.commit()
