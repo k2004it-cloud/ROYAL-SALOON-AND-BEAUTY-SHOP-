@@ -73,9 +73,8 @@
   min-height: 100svh;
   width: 100%;
   overflow-x: hidden;
-  background-image:
-    linear-gradient(rgba(18, 17, 15, 0.2), rgba(18, 17, 15, 0.2)),
-    url('/royal-salon-background.webp');
+  background-color: #12110f;
+  background-image: url('/royal-salon-background.webp');
   background-position: center center;
   background-repeat: no-repeat;
   background-size: cover;
