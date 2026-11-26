@@ -714,6 +714,23 @@ def _send_password_reset_email(destination: str, reset_url: str, config: dict[st
             smtp.send_message(message)
 
 
+def _password_reset_delivery_error(exc: Exception) -> str:
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        return "The SMTP server rejected the mailbox username or password. Check SMTP_USERNAME and SMTP_PASSWORD in Vercel."
+    if isinstance(exc, ssl.SSLError):
+        return "The SMTP TLS handshake failed. Use port 465 for implicit TLS or port 587 for STARTTLS, matching your provider."
+    if isinstance(exc, smtplib.SMTPResponseException):
+        code = exc.smtp_code
+        if code in {530, 535}:
+            return "The SMTP server rejected authentication. Check the mailbox username and password in Vercel."
+        if code in {550, 553}:
+            return "The SMTP server rejected the sender address. Set SMTP_FROM_EMAIL to an address allowed by your mail provider."
+        return f"The SMTP server rejected the email (response {code}). Check the sender address and mailbox settings."
+    if isinstance(exc, (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected, OSError)):
+        return "Could not connect to the SMTP server. Check SMTP_HOST and SMTP_PORT, and confirm the provider allows external SMTP connections."
+    return "The SMTP server could not send the email. Check the mailbox and sender settings with your email provider."
+
+
 def _password_reset_table_ready(conn) -> bool:
     try:
         conn.execute("SELECT 1 FROM password_reset_tokens LIMIT 0")
@@ -2189,7 +2206,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                     finally:
                         conn.close()
                 print(f"Password reset email delivery failed ({exc.__class__.__name__}).")
-                self._send_json(503, {"error": "Password reset email could not be sent. Try again later or contact the salon administrator."})
+                self._send_json(503, {"error": _password_reset_delivery_error(exc)})
                 return
 
         self._send_json(200, {"message": generic_message})
