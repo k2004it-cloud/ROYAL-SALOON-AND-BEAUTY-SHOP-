@@ -639,15 +639,27 @@ def _credential_matches(value: str, salt_hex: str, expected_hash: str) -> bool:
     return hmac.compare_digest(actual_hash, expected_hash)
 
 
-def _password_reset_config() -> dict[str, str | int] | None:
+def _password_reset_config() -> tuple[dict[str, str | int] | None, str | None]:
     host = os.environ.get("SMTP_HOST", "").strip()
     username = os.environ.get("SMTP_USERNAME", "").strip()
     password = os.environ.get("SMTP_PASSWORD", "")
     sender = os.environ.get("SMTP_FROM_EMAIL", "").strip()
+    config_errors: list[str] = []
+    for key, value in (
+        ("SMTP_HOST", host),
+        ("SMTP_USERNAME", username),
+        ("SMTP_PASSWORD", password),
+        ("SMTP_FROM_EMAIL", sender),
+    ):
+        if not value:
+            config_errors.append(key)
     try:
         port = int(os.environ.get("SMTP_PORT", "587"))
     except ValueError:
-        return None
+        port = 0
+        config_errors.append("SMTP_PORT (must be 465 or 587)")
+    if port not in {465, 587} and "SMTP_PORT (must be 465 or 587)" not in config_errors:
+        config_errors.append("SMTP_PORT (must be 465 or 587)")
 
     public_url = os.environ.get("APP_URL", "").strip().rstrip("/")
     if not public_url:
@@ -655,28 +667,24 @@ def _password_reset_config() -> dict[str, str | int] | None:
         if vercel_domain:
             public_url = f"https://{vercel_domain}"
     parsed_url = urlsplit(public_url)
-    if (
-        not host
-        or not username
-        or not password
-        or not sender
-        or not parsed_url.hostname
-        or parsed_url.scheme not in {"https", "http"}
-        or port < 1
-        or port > 65535
-    ):
-        return None
-    if os.environ.get("NODE_ENV", "").lower() == "production" and parsed_url.scheme != "https":
-        return None
+    if not parsed_url.hostname or parsed_url.scheme not in {"https", "http"}:
+        config_errors.append("APP_URL (must be an http:// or https:// site URL)")
+    elif os.environ.get("NODE_ENV", "").lower() == "production" and parsed_url.scheme != "https":
+        config_errors.append("APP_URL (production requires https://)")
+    if config_errors:
+        return None, ", ".join(config_errors)
 
-    return {
-        "host": host,
-        "port": port,
-        "username": username,
-        "password": password,
-        "sender": sender,
-        "base_url": urlunsplit((parsed_url.scheme, parsed_url.netloc, "", "", "")),
-    }
+    return (
+        {
+            "host": host,
+            "port": port,
+            "username": username,
+            "password": password,
+            "sender": sender,
+            "base_url": urlunsplit((parsed_url.scheme, parsed_url.netloc, "", "", "")),
+        },
+        None,
+    )
 
 
 def _send_password_reset_email(destination: str, reset_url: str, config: dict[str, str | int]) -> None:
@@ -2073,15 +2081,15 @@ class SalonHandler(BaseHTTPRequestHandler):
 
     def _handle_password_reset_request(self, body: dict) -> None:
         generic_message = "If an active account uses that email, a password reset link will be sent shortly."
-        config = _password_reset_config()
+        config, config_error = _password_reset_config()
         if not config:
             self._send_json(
                 503,
                 {
                     "error": (
-                        "Password reset email is not configured. Set SMTP_HOST, SMTP_USERNAME, "
-                        "SMTP_PASSWORD, SMTP_FROM_EMAIL, and APP_URL in the server environment, "
-                        "then restart or redeploy the app."
+                        "Password reset email configuration is incomplete or invalid: "
+                        f"{config_error}. Update these Vercel Production environment variables "
+                        "and redeploy the app."
                     )
                 },
             )
@@ -2102,7 +2110,12 @@ class SalonHandler(BaseHTTPRequestHandler):
         created = False
         remote_ip = self.headers.get("X-Real-IP", "").strip()
         if not remote_ip:
-            remote_ip = self.client_address[0] if self.client_address else "unknown"
+            forwarded_for = self.headers.get("X-Forwarded-For", "")
+            if forwarded_for:
+                remote_ip = forwarded_for.split(",", 1)[0].strip()
+        if not remote_ip:
+            client_address = getattr(self, "client_address", None)
+            remote_ip = client_address[0] if client_address else "unknown"
         reset_ip_key = hashlib.sha256(f"password-reset-ip:{remote_ip}".encode("utf-8")).hexdigest()
         rate_limited = False
 
