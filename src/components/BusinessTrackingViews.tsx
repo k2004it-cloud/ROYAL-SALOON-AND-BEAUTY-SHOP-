@@ -14,12 +14,14 @@ export function LoyaltyView({ clients }: { clients: Client[] }) {
   </div>;
 }
 
-const COMMON_EXPENSES = ['Electricity', 'Water', 'Wax', 'Spray', 'Mousse', 'Rent', 'Other'];
+const EXPENSE_CATEGORIES = ['Electricity', 'Water', 'Wax', 'Spray', 'Mousse', 'Other'];
 const blankForm = () => ({ category: 'Electricity', description: '', amount_ksh: '', expense_date: todayIsoDate() });
 
 export function ExpensesView() {
   const [expenses, setExpenses] = useState<SalonExpense[]>([]);
   const [form, setForm] = useState(blankForm);
+  const [customCategory, setCustomCategory] = useState('');
+  const categoryChoice = EXPENSE_CATEGORIES.includes(form.category) ? form.category : 'Other';
   const [editingId, setEditingId] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -30,19 +32,20 @@ export function ExpensesView() {
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      const payload = { ...form, amount_ksh: Number(form.amount_ksh) };
+      const payload = { ...form, category: categoryChoice === 'Other' ? customCategory.trim() : categoryChoice, amount_ksh: Number(form.amount_ksh) };
       const result = editingId ? await salonApi.updateExpense(editingId, payload) : await salonApi.createExpense(payload);
       setExpenses((current) => [result.expense, ...current.filter((item) => item.id !== result.expense.id)].sort((a, b) => b.expense_date.localeCompare(a.expense_date)));
-      setForm(blankForm()); setEditingId('');
+      setForm(blankForm()); setCustomCategory(''); setEditingId('');
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to save expense.'); }
     finally { setBusy(false); }
   };
-  const edit = (expense: SalonExpense) => { setEditingId(expense.id); setForm({ category: expense.category, description: expense.description, amount_ksh: String(expense.amount_ksh), expense_date: expense.expense_date }); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const edit = (expense: SalonExpense) => { const isPreset = EXPENSE_CATEGORIES.includes(expense.category); setEditingId(expense.id); setForm({ category: isPreset ? expense.category : 'Other', description: expense.description, amount_ksh: String(expense.amount_ksh), expense_date: expense.expense_date }); setCustomCategory(isPreset && expense.category !== 'Other' ? '' : expense.category); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   return <div className="space-y-6">
     <div><p className="mb-1 text-[10px] font-bold uppercase tracking-[0.24em] text-[#2563EB]">Business costs</p><h1 className="font-serif-editorial text-3xl font-semibold text-[#14213D]">Expenses</h1><p className="mt-1 text-sm text-[#667085]">Record and edit salon expenses. Entries are shared with the admin and employee workspace.</p></div>
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-      <form onSubmit={submit} className="salon-card space-y-4 rounded-2xl p-5"><div className="flex items-center justify-between"><h2 className="font-serif-editorial text-xl font-semibold text-[#14213D]">{editingId ? 'Edit expense' : 'Add expense'}</h2>{editingId && <button type="button" onClick={() => { setEditingId(''); setForm(blankForm()); }} aria-label="Cancel edit" className="rounded-lg p-2 text-[#667085] hover:bg-[#F4F7FC]"><X className="h-4 w-4" /></button>}</div>
-        <label className="block space-y-1.5 text-xs font-semibold text-[#344054]">Category<input list="expense-categories" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} required maxLength={80} className="salon-input w-full text-sm" placeholder="Choose or type a category" /><datalist id="expense-categories">{COMMON_EXPENSES.map((category) => <option key={category} value={category} />)}</datalist></label>
+      <form onSubmit={submit} className="salon-card space-y-4 rounded-2xl p-5"><div className="flex items-center justify-between"><h2 className="font-serif-editorial text-xl font-semibold text-[#14213D]">{editingId ? 'Edit expense' : 'Add expense'}</h2>{editingId && <button type="button" onClick={() => { setEditingId(''); setForm(blankForm()); setCustomCategory(''); }} aria-label="Cancel edit" className="rounded-lg p-2 text-[#667085] hover:bg-[#F4F7FC]"><X className="h-4 w-4" /></button>}</div>
+        <label className="block space-y-1.5 text-xs font-semibold text-[#344054]">Expense type<select value={categoryChoice} onChange={(event) => setForm({ ...form, category: event.target.value })} className="salon-input w-full text-sm">{EXPENSE_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
+        {categoryChoice === 'Other' && <label className="block space-y-1.5 text-xs font-semibold text-[#344054]">Custom expense type<input value={customCategory} onChange={(event) => setCustomCategory(event.target.value)} required maxLength={80} className="salon-input w-full text-sm" placeholder="Enter expense type" /></label>}
         <label className="block space-y-1.5 text-xs font-semibold text-[#344054]">Description (optional)<input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} maxLength={240} className="salon-input w-full text-sm" placeholder="e.g. November bill or product restock" /></label>
         <div className="grid grid-cols-2 gap-3"><label className="block space-y-1.5 text-xs font-semibold text-[#344054]">Amount (KSh)<input type="number" min="1" step="1" required value={form.amount_ksh} onChange={(event) => setForm({ ...form, amount_ksh: event.target.value })} className="salon-input w-full text-sm" placeholder="0" /></label><label className="block space-y-1.5 text-xs font-semibold text-[#344054]">Date<input type="date" required value={form.expense_date} onChange={(event) => setForm({ ...form, expense_date: event.target.value })} className="salon-input w-full text-sm" /></label></div>
         {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}<button disabled={busy} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#6D28D9] text-sm font-semibold text-white disabled:opacity-60">{editingId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{busy ? 'Saving...' : editingId ? 'Save changes' : 'Add expense'}</button>
