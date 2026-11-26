@@ -23,6 +23,7 @@ import { ClientsView } from './components/ClientsView';
 import { CatalogView } from './components/CatalogView';
 import { LedgerView } from './components/LedgerView';
 import { AuthView } from './components/AuthView';
+import { PostLoginLoader } from './components/PostLoginLoader';
 import { EmployeesView } from './components/EmployeesView';
 import { AdminAccountsView } from './components/AdminAccountsView';
 import { WorkspaceHomeView } from './components/WorkspaceHomeView';
@@ -156,10 +157,17 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authConnectionError, setAuthConnectionError] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
+  const [showPostLoginLoader, setShowPostLoginLoader] = useState(false);
   const [workspaceSearch, setWorkspaceSearch] = useState('');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [openSupportCount, setOpenSupportCount] = useState(0);
   const [unreadAnnouncementCount, setUnreadAnnouncementCount] = useState(0);
+
+  useEffect(() => {
+    if (!showPostLoginLoader) return;
+    const timeout = window.setTimeout(() => setShowPostLoginLoader(false), 2500);
+    return () => window.clearTimeout(timeout);
+  }, [showPostLoginLoader]);
 
   const navigatePath = useCallback((targetPath: string, replace = false) => {
     if (window.location.pathname !== targetPath) {
@@ -372,6 +380,7 @@ export default function App() {
     setAuthError('');
     try {
       const response = await salonApi.login(payload);
+      setShowPostLoginLoader(true);
       setAuthUser(response.user);
       setSetupRequired(false);
       setLoading(true);
@@ -619,6 +628,10 @@ export default function App() {
   const profileStylist = authUser?.stylist_id
     ? data?.stylists.find((stylist) => stylist.id === authUser.stylist_id)
     : undefined;
+
+  if (showPostLoginLoader) {
+    return <PostLoginLoader />;
+  }
 
   if (authChecking) {
     return (

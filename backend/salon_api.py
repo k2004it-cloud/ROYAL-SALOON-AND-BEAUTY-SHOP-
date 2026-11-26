@@ -2404,8 +2404,12 @@ class SalonHandler(BaseHTTPRequestHandler):
                         and _credential_matches(password, user["password_salt"], user["password_hash"])
                     )
                     if not valid_credential:
-                        attempts = (attempt["attempts"] if attempt else 0) + 1
-                        locked_until = now_epoch + 900 if attempts >= 5 else 0
+                        attempts = (
+                            1
+                            if attempt and attempt["locked_until"] and attempt["locked_until"] <= now_epoch
+                            else (attempt["attempts"] if attempt else 0) + 1
+                        )
+                        locked_until = now_epoch + 900 if attempts >= 15 else 0
                         conn.execute(
                             """
                             INSERT INTO auth_attempts (account_key, attempts, locked_until)
@@ -2415,6 +2419,9 @@ class SalonHandler(BaseHTTPRequestHandler):
                             (account_key, attempts, locked_until),
                         )
                         conn.commit()
+                        if attempts >= 15:
+                            self._send_json(429, {"error": "Too many sign-in attempts. Try again in 15 minutes."})
+                            return
                         self._send_json(401, {"error": "Username, password, or access link is incorrect."})
                         return
 
