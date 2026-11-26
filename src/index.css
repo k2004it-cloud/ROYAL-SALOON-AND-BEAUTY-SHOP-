@@ -111,6 +111,226 @@
   }
 }
 
+.theme-toggle {
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #D8E4F2;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #14213D;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.theme-toggle:hover {
+  background: #EFF4FF;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+  color: #E5EAF2;
+  background-color: #101722;
+}
+
+html[data-theme='dark'] body {
+  color: #E5EAF2;
+  background-color: #101722;
+}
+
+html[data-theme='dark'] #root {
+  background-image:
+    linear-gradient(rgba(8, 12, 19, 0.76), rgba(8, 12, 19, 0.76)),
+    url('/royal-salon-background.webp');
+  background-color: #101722;
+}
+
+html[data-theme='dark'] .auth-page {
+  background-image:
+    linear-gradient(rgba(8, 10, 14, 0.3), rgba(8, 10, 14, 0.3)),
+    url('/royal-salon-background.webp');
+}
+
+html[data-theme='dark'] .salon-card,
+html[data-theme='dark'] .salon-sheet {
+  border-color: #344255;
+  background-color: #172231;
+  color: #E5EAF2;
+  box-shadow: 0 12px 30px -16px rgba(0, 0, 0, 0.62), 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme='dark'] .salon-input,
+html[data-theme='dark'] input:not([type='checkbox']):not([type='radio']),
+html[data-theme='dark'] select,
+html[data-theme='dark'] textarea {
+  border-color: #475569;
+  background-color: #111A27;
+  color: #F1F5F9;
+}
+
+html[data-theme='dark'] input::placeholder,
+html[data-theme='dark'] textarea::placeholder {
+  color: #A6B1C0;
+}
+
+html[data-theme='dark'] .salon-input:focus {
+  border-color: #60A5FA;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+html[data-theme='dark'] .theme-toggle {
+  border-color: #475569;
+  background: #1B2736;
+  color: #F4C95D;
+}
+
+html[data-theme='dark'] .theme-toggle:hover {
+  background: #273548;
+}
+
+html[data-theme='dark'] [class~="bg-white"],
+html[data-theme='dark'] [class~="bg-white/95"],
+html[data-theme='dark'] [class~="bg-white/90"],
+html[data-theme='dark'] [class~="bg-white/80"],
+html[data-theme='dark'] [class~="bg-[#FFFFFF]"],
+html[data-theme='dark'] [class~="bg-[#F4F7FC]"],
+html[data-theme='dark'] [class~="bg-[#F8FAFD]"],
+html[data-theme='dark'] [class~="bg-[#F8FAFF]"],
+html[data-theme='dark'] [class~="bg-[#F5F6FF]"],
+html[data-theme='dark'] [class~="bg-[#F1F4F9]"],
+html[data-theme='dark'] [class~="bg-[#F1F4FF]"],
+html[data-theme='dark'] [class~="bg-[#F3F5FF]"],
+html[data-theme='dark'] [class~="bg-[#EFF4FF]"],
+html[data-theme='dark'] [class~="bg-[#EAF2FF]"],
+html[data-theme='dark'] [class~="bg-[#E8F1FF]"],
+html[data-theme='dark'] [class~="bg-[#F3EDE8]"],
+html[data-theme='dark'] [class~="bg-[#EDE9FE]"],
+html[data-theme='dark'] [class~="bg-[#DDD6FE]"],
+html[data-theme='dark'] [class~="bg-[#EFF6FF]"],
+html[data-theme='dark'] [class~="bg-slate-100"],
+html[data-theme='dark'] [class~="bg-blue-50"],
+html[data-theme='dark'] [class~="bg-blue-100"],
+html[data-theme='dark'] [class~="bg-violet-50"],
+html[data-theme='dark'] [class~="bg-violet-100"] {
+  background-color: #1B2838 !important;
+}
+
+html[data-theme='dark'] [class~="bg-[#FEF2F2]"],
+html[data-theme='dark'] [class~="bg-red-50"],
+html[data-theme='dark'] [class~="bg-red-100"] {
+  background-color: #3A252B !important;
+}
+
+html[data-theme='dark'] [class~="bg-[#FFF7E6]"],
+html[data-theme='dark'] [class~="bg-[#FFF7ED]"],
+html[data-theme='dark'] [class~="bg-[#FFFBEB]"],
+html[data-theme='dark'] [class~="bg-amber-50"],
+html[data-theme='dark'] [class~="bg-amber-100"],
+html[data-theme='dark'] [class~="bg-orange-100"] {
+  background-color: #3A301F !important;
+}
+
+html[data-theme='dark'] [class~="bg-[#ECFDF5]"],
+html[data-theme='dark'] [class~="bg-[#DCFCE7]"],
+html[data-theme='dark'] [class~="bg-emerald-50"],
+html[data-theme='dark'] [class~="bg-emerald-100"] {
+  background-color: #1D372D !important;
+}
+
+html[data-theme='dark'] [class~="text-[#14213D]"],
+html[data-theme='dark'] [class~="text-[#151C27]"],
+html[data-theme='dark'] [class~="text-[#071B53]"],
+html[data-theme='dark'] [class~="text-[#153560]"],
+html[data-theme='dark'] [class~="text-[#12396D]"],
+html[data-theme='dark'] [class~="text-[#344054]"],
+html[data-theme='dark'] [class~="text-[#475467]"],
+html[data-theme='dark'] [class~="text-[#667085]"],
+html[data-theme='dark'] [class~="text-[#64748B]"],
+html[data-theme='dark'] [class~="text-[#98A2B3]"] {
+  color: #D5DDE8 !important;
+}
+
+html[data-theme='dark'] [class~="text-[#0B5ED7]"],
+html[data-theme='dark'] [class~="text-[#0757D8]"],
+html[data-theme='dark'] [class~="text-[#2563EB]"],
+html[data-theme='dark'] [class~="text-[#1E40AF]"] {
+  color: #93C5FD !important;
+}
+
+html[data-theme='dark'] [class~="text-[#6D28D9]"],
+html[data-theme='dark'] [class~="text-[#5B21B6]"] {
+  color: #C4B5FD !important;
+}
+
+html[data-theme='dark'] [class~="text-[#B91C1C]"],
+html[data-theme='dark'] [class~="text-[#EF4444]"],
+html[data-theme='dark'] [class~="text-[#C2410C]"] {
+  color: #FCA5A5 !important;
+}
+
+html[data-theme='dark'] [class~="text-[#047857]"],
+html[data-theme='dark'] [class~="text-[#16A34A]"],
+html[data-theme='dark'] [class~="text-[#10B981]"] {
+  color: #86EFAC !important;
+}
+
+html[data-theme='dark'] [class~="text-[#B45309]"],
+html[data-theme='dark'] [class~="text-[#D97706]"],
+html[data-theme='dark'] [class~="text-[#9A765F]"],
+html[data-theme='dark'] [class~="text-amber-700"],
+html[data-theme='dark'] [class~="text-amber-800"],
+html[data-theme='dark'] [class~="text-amber-900"],
+html[data-theme='dark'] [class~="text-amber-950"] {
+  color: #FCD34D !important;
+}
+
+html[data-theme='dark'] [class~="text-blue-700"] {
+  color: #93C5FD !important;
+}
+
+html[data-theme='dark'] [class~="text-emerald-700"],
+html[data-theme='dark'] [class~="text-emerald-800"],
+html[data-theme='dark'] [class~="text-green-700"] {
+  color: #86EFAC !important;
+}
+
+html[data-theme='dark'] [class~="text-red-600"],
+html[data-theme='dark'] [class~="text-red-700"] {
+  color: #FCA5A5 !important;
+}
+
+html[data-theme='dark'] [class~="text-slate-600"] {
+  color: #CBD5E1 !important;
+}
+
+html[data-theme='dark'] [class~="text-violet-700"] {
+  color: #C4B5FD !important;
+}
+
+html[data-theme='dark'] [class~="border-[#E1E7F0]"],
+html[data-theme='dark'] [class~="border-[#E1E7F1]"],
+html[data-theme='dark'] [class~="border-[#DDE6F1]"],
+html[data-theme='dark'] [class~="border-[#D8E4F2]"],
+html[data-theme='dark'] [class~="border-[#D8DFFA]"],
+html[data-theme='dark'] [class~="border-[#DFE7F1]"],
+html[data-theme='dark'] [class~="border-[#E7ECF5]"],
+html[data-theme='dark'] [class~="border-[#EEF1F6]"],
+html[data-theme='dark'] [class~="border-[#C5D8F4]"],
+html[data-theme='dark'] [class~="border-[#D8E7FB]"],
+html[data-theme='dark'] [class~="border-[#C9D5E5]"] {
+  border-color: #3A495C !important;
+}
+
+html[data-theme='dark'] [class~="border-amber-300"],
+html[data-theme='dark'] [class~="border-amber-400"],
+html[data-theme='dark'] [class~="border-emerald-200"],
+html[data-theme='dark'] [class~="border-red-100"],
+html[data-theme='dark'] [class~="border-red-200"] {
+  border-color: #4B596B !important;
+}
+
 .salon-sheet {
   background-color: #FFFFFF;
   border: 1px solid #DFE7F1;

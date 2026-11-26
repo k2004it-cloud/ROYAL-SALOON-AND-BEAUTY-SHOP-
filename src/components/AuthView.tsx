@@ -3,6 +3,7 @@ import { ArrowRight, RefreshCw } from 'lucide-react';
 import { salonApi } from '../api/client';
 import type { StaffRole } from '../types';
 import { BrandFooter } from './BrandFooter';
+import { ThemeToggle } from './ThemeToggle';
 
 interface AuthViewProps {
   role: StaffRole | null;
@@ -113,6 +114,7 @@ export function AuthView({
               Staff workspace access
             </p>
           </div>
+          <ThemeToggle className="ml-auto shrink-0" />
         </div>
 
         {role === null ? (

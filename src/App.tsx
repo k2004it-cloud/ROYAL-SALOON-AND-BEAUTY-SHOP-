@@ -39,6 +39,7 @@ import { ExpensesView, LoyaltyView } from './components/BusinessTrackingViews';
 import { SuperadminView } from './components/SuperadminView';
 import { TrainingView } from './components/TrainingView';
 import { BrandFooter } from './components/BrandFooter';
+import { ThemeToggle } from './components/ThemeToggle';
 import { Bell, CalendarDays, ChevronDown, Crown, LogOut, Menu, Search } from 'lucide-react';
 
 const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
@@ -771,6 +772,7 @@ export default function App() {
                 </div>
               )}
             </div>
+            <ThemeToggle className="shrink-0" />
             <button type="button" aria-label="Open notifications" onClick={() => navigateToTab('notifications')} className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#071B53] hover:bg-[#EFF4FF]">
               <Bell className="h-6 w-6" />
               {headerNotificationCount > 0 && <span className="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F42F43] px-1 text-[10px] font-bold text-white">{headerNotificationCount > 9 ? '9+' : headerNotificationCount}</span>}
