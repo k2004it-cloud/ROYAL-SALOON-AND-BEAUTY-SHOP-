@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "name": "Royal Saloon & Beauty Hub",
+  "short_name": "Royal Salon",
+  "description": "Royal Saloon salon operations, scheduling and point of sale.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2167e8",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/royal-salon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/royal-salon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/royal-salon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
