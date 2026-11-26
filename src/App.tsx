@@ -33,12 +33,15 @@ import { EmployeeAttendanceView } from './components/EmployeeAttendanceView';
 import { TasksView } from './components/TasksView';
 import { InventoryReportsView } from './components/InventoryReportsView';
 import { PayrollView } from './components/PayrollView';
+import { ExpensesView, LoyaltyView } from './components/BusinessTrackingViews';
 import { Bell, CalendarDays, ChevronDown, Crown, LogOut, Menu, Search } from 'lucide-react';
 
 const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
   admin: [
     'dashboard',
     'clients',
+    'loyalty',
+    'expenses',
     'employees',
     'catalog',
     'schedule',
@@ -67,6 +70,8 @@ const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
     'schedule',
     'pos',
     'clients',
+    'loyalty',
+    'expenses',
     'inventory',
     'reports',
   ],
@@ -546,6 +551,8 @@ export default function App() {
         { label: 'My Earnings', tab: 'earnings' },
         { label: 'My Appointments', tab: 'my-appointments' },
         { label: 'Services & Clients', tab: 'clients' },
+        { label: 'Loyalty Points', tab: 'loyalty' },
+        { label: 'Expenses', tab: 'expenses' },
         { label: 'Sales & Payments', tab: 'pos' },
         { label: 'Inventory', tab: 'inventory' },
         { label: 'My Profile', tab: 'profile' },
@@ -560,6 +567,8 @@ export default function App() {
         { label: 'Dashboard', tab: 'dashboard' },
         { label: 'Notifications', tab: 'notifications' },
         { label: 'Clients', tab: 'clients' },
+        { label: 'Loyalty Points', tab: 'loyalty' },
+        { label: 'Expenses', tab: 'expenses' },
         { label: 'Employees', tab: 'employees' },
         { label: 'Services & Products', tab: 'catalog' },
         { label: 'Appointments', tab: 'schedule' },
@@ -786,6 +795,8 @@ export default function App() {
             />
           )}
           {activeTab === 'notifications' && <NotificationsView user={authUser} appointments={data.appointments} dashboard={data.employee_dashboard} />}
+          {activeTab === 'loyalty' && <LoyaltyView clients={data.clients} />}
+          {activeTab === 'expenses' && <ExpensesView />}
           {activeTab === 'timesheet' && authUser.role === 'employee' && <EmployeeAttendanceView openingTime={data.business_settings.opening_time} />}
           {activeTab === 'attendance' && authUser.role === 'admin' && <AttendanceView openingTime={data.business_settings.opening_time} />}
           {activeTab === 'tasks' && <TasksView user={authUser} />}

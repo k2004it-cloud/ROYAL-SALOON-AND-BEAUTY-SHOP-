@@ -13,6 +13,7 @@ import type {
   DailyRevenuePoint,
   EmployeeEarningsReport,
   InventoryReport,
+  SalonExpense,
   InventoryReportType,
   PaymentMethod,
   AuthStatus,
@@ -63,6 +64,18 @@ export function offsetIsoDate(baseIso: string, deltaDays: number): string {
 }
 
 export const salonApi = {
+  listExpenses(): Promise<{ expenses: SalonExpense[] }> {
+    return apiRequest('/api/expenses');
+  },
+
+  createExpense(payload: Pick<SalonExpense, 'category' | 'description' | 'amount_ksh' | 'expense_date'>): Promise<{ expense: SalonExpense }> {
+    return apiRequest('/api/expenses', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  updateExpense(id: string, payload: Pick<SalonExpense, 'category' | 'description' | 'amount_ksh' | 'expense_date'>): Promise<{ expense: SalonExpense }> {
+    return apiRequest(`/api/expenses/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+  },
+
   authStatus(): Promise<AuthStatus> {
     return apiRequest<AuthStatus>('/api/auth/status');
   },

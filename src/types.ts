@@ -20,6 +20,8 @@ export type WorkspaceTab =
   | 'settings'
   | 'system-logs'
   | 'backups'
+  | 'loyalty'
+  | 'expenses'
   | 'support';
 
 export type StaffRole = 'admin' | 'employee';
@@ -236,10 +238,21 @@ export interface Client {
   preferred_stylist_id: string;
   formula_notes: string;
   visit_count: number;
+  loyalty_points: number;
   total_spent_ksh: number;
   last_visit: string;
   created_at: string;
   service_history?: Array<{ date: string; status: string; service_name: string; duration_min: number }>;
+}
+
+export interface SalonExpense {
+  id: string;
+  category: string;
+  description: string;
+  amount_ksh: number;
+  expense_date: string;
+  created_by_name: string;
+  updated_at: string;
 }
 
 export interface Appointment {

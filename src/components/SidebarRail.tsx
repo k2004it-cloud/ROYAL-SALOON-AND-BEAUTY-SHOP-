@@ -20,6 +20,8 @@ import {
   Database,
   CircleHelp,
   X,
+  Gift,
+  ReceiptText,
 } from 'lucide-react';
 import type { StaffUser, WorkspaceTab } from '../types';
 
@@ -47,6 +49,8 @@ const ADMIN_NAV_ITEMS: Array<{
 }> = [
   { id: 'dashboard', label: 'Dashboard', shortLabel: 'Dashboard', Icon: LayoutDashboard },
   { id: 'clients', label: 'Clients', shortLabel: 'Clients', Icon: Users },
+  { id: 'loyalty', label: 'Loyalty Points', shortLabel: 'Loyalty', Icon: Gift },
+  { id: 'expenses', label: 'Expenses', shortLabel: 'Expenses', Icon: ReceiptText },
   { id: 'employees', label: 'Employees', shortLabel: 'Employees', Icon: UsersRound },
   { id: 'catalog', label: 'Services & Products', shortLabel: 'Services', Icon: Sparkles },
   { id: 'schedule', label: 'Appointments', shortLabel: 'Bookings', Icon: CalendarDays },
@@ -75,6 +79,8 @@ const EMPLOYEE_NAV_ITEMS: Array<{
   { id: 'timesheet', label: 'Attendance', shortLabel: 'Clock', Icon: Clock3 },
   { id: 'tasks', label: 'My Tasks', shortLabel: 'Tasks', Icon: ClipboardCheck },
   { id: 'clients', label: 'Services & Clients', shortLabel: 'Clients', Icon: Users },
+  { id: 'loyalty', label: 'Loyalty Points', shortLabel: 'Loyalty', Icon: Gift },
+  { id: 'expenses', label: 'Expenses', shortLabel: 'Expenses', Icon: ReceiptText },
   { id: 'pos', label: 'Sales & Payments', shortLabel: 'Sales', Icon: CreditCard },
   { id: 'inventory', label: 'Inventory', shortLabel: 'Inventory', Icon: PackageSearch },
   { id: 'profile', label: 'My Profile', shortLabel: 'Profile', Icon: UsersRound },

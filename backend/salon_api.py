@@ -183,7 +183,7 @@ def init_db() -> None:
                     "support_requests", "announcements", "announcement_reads", "stylists",
                     "catalog_items", "clients", "appointments", "tickets", "ticket_items",
                     "commission_payouts", "commission_payout_items", "attendance_records",
-                    "staff_tasks", "inventory_reports",
+                    "staff_tasks", "inventory_reports", "salon_expenses",
                 }
                 existing_tables = {
                     row["table_name"]
@@ -346,6 +346,7 @@ def init_db() -> None:
                 preferred_stylist_id TEXT DEFAULT '',
                 formula_notes TEXT NOT NULL DEFAULT '',
                 visit_count INTEGER NOT NULL DEFAULT 0,
+                loyalty_points INTEGER NOT NULL DEFAULT 0,
                 total_spent_ksh INTEGER NOT NULL DEFAULT 0,
                 last_visit TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL
@@ -384,7 +385,9 @@ def init_db() -> None:
                 change_ksh INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL CHECK(status IN ('Paid', 'Voided')),
                 created_at TEXT NOT NULL,
-                business_date TEXT NOT NULL
+                business_date TEXT NOT NULL,
+                loyalty_points_earned INTEGER NOT NULL DEFAULT 0,
+                loyalty_points_redeemed INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS ticket_items (
@@ -476,10 +479,30 @@ def init_db() -> None:
                 FOREIGN KEY (catalog_item_id) REFERENCES catalog_items(id),
                 FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS salon_expenses (
+                id TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                amount_ksh INTEGER NOT NULL CHECK(amount_ksh > 0),
+                expense_date TEXT NOT NULL,
+                created_by_name TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS salon_expenses_date_idx ON salon_expenses(expense_date DESC);
             CREATE INDEX IF NOT EXISTS idx_inventory_reports_status_created
                 ON inventory_reports(status, created_at DESC);
             """
         )
+
+        client_columns = {row["name"] for row in cur.execute("PRAGMA table_info(clients)")}
+        if "loyalty_points" not in client_columns:
+            cur.execute("ALTER TABLE clients ADD COLUMN loyalty_points INTEGER NOT NULL DEFAULT 0")
+        ticket_columns = {row["name"] for row in cur.execute("PRAGMA table_info(tickets)")}
+        if "loyalty_points_earned" not in ticket_columns:
+            cur.execute("ALTER TABLE tickets ADD COLUMN loyalty_points_earned INTEGER NOT NULL DEFAULT 0")
+        if "loyalty_points_redeemed" not in ticket_columns:
+            cur.execute("ALTER TABLE tickets ADD COLUMN loyalty_points_redeemed INTEGER NOT NULL DEFAULT 0")
 
         settings_columns = {row["name"] for row in cur.execute("PRAGMA table_info(business_settings)")}
         task_columns = {row["name"] for row in cur.execute("PRAGMA table_info(staff_tasks)")}
@@ -1825,6 +1848,11 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"clients": clients})
                     return
 
+                if path == "/api/expenses":
+                    rows = conn.execute("SELECT * FROM salon_expenses ORDER BY expense_date DESC, updated_at DESC LIMIT 500").fetchall()
+                    self._send_json(200, {"expenses": [dict(row) for row in rows]})
+                    return
+
                 if path == "/api/catalog":
                     catalog = [dict(r) for r in conn.execute("SELECT * FROM catalog_items WHERE active = 1 ORDER BY kind, category, name").fetchall()]
                     self._send_json(200, {"catalog": catalog})
@@ -2795,6 +2823,8 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                     prepared_items = []
                     subtotal_ksh = 0
+                    client_loyalty = conn.execute("SELECT loyalty_points FROM clients WHERE id = ?", (client_id,)).fetchone() if client_id else None
+                    reward_redeemed = bool(client_loyalty and int(client_loyalty["loyalty_points"] or 0) >= 15)
 
                     for req_item in items:
                         cat_id = req_item.get("catalog_item_id", "")
@@ -2880,13 +2910,28 @@ class SalonHandler(BaseHTTPRequestHandler):
                         self._send_json(400, {"error": "No valid ticket items provided."})
                         return
 
+                    loyalty_reward_discount_ksh = 0
+                    if reward_redeemed:
+                        reward_item = next((item for item in prepared_items if item["kind"] == "service"), None)
+                        if reward_item:
+                            # Apply 50% off one unit of the next service and reduce stylist commission accordingly.
+                            loyalty_reward_discount_ksh = (reward_item["unit_price_ksh"] + 1) // 2
+                            reward_item["line_total_ksh"] = max(0, reward_item["line_total_ksh"] - loyalty_reward_discount_ksh)
+                            reward_item["commission_ksh"] = round(reward_item["line_total_ksh"] * (float(stylists_map.get(reward_item["stylist_id"], {}).get("commission_rate", 0)) if reward_item["stylist_id"] else 0))
+                        else:
+                            reward_redeemed = False
+
+                    loyalty_earned = 1 if client_id and any(item["kind"] == "service" for item in prepared_items) else 0
+
+                    discount_base_ksh = max(0, items_subtotal_ksh - loyalty_reward_discount_ksh)
                     if discount_type == "percent":
-                        discount_ksh = round(items_subtotal_ksh * min(max(discount_value, 0.0), 100.0) / 100.0)
+                        discount_ksh = round(discount_base_ksh * min(max(discount_value, 0.0), 100.0) / 100.0)
                     elif discount_type == "fixed":
-                        discount_ksh = min(round(max(discount_value, 0.0)), items_subtotal_ksh)
+                        discount_ksh = min(round(max(discount_value, 0.0)), discount_base_ksh)
                     else:
                         discount_ksh = 0
 
+                    discount_ksh += loyalty_reward_discount_ksh
                     total_ksh = max(0, subtotal_ksh - discount_ksh)
                     # Kenyan standard 16% VAT inclusive extraction for clear receipt reporting
                     tax_ksh = round(max(0, items_subtotal_ksh - discount_ksh) * 16 / 116)
@@ -2912,8 +2957,8 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                     conn.execute(
                         """
-                        INSERT INTO tickets (id, ticket_number, client_id, client_name, appointment_id, subtotal_ksh, discount_ksh, tax_ksh, total_ksh, payment_method, transaction_reference, tendered_ksh, change_ksh, status, created_at, business_date)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?)
+                        INSERT INTO tickets (id, ticket_number, client_id, client_name, appointment_id, subtotal_ksh, discount_ksh, tax_ksh, total_ksh, payment_method, transaction_reference, tendered_ksh, change_ksh, status, created_at, business_date, loyalty_points_earned, loyalty_points_redeemed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?, ?)
                         """,
                         (
                             ticket_id,
@@ -2931,6 +2976,8 @@ class SalonHandler(BaseHTTPRequestHandler):
                             change_ksh,
                             now_iso,
                             business_date,
+                            loyalty_earned,
+                            15 if reward_redeemed else 0,
                         ),
                     )
 
@@ -2965,11 +3012,12 @@ class SalonHandler(BaseHTTPRequestHandler):
                             """
                             UPDATE clients
                             SET visit_count = visit_count + 1,
+                                loyalty_points = MAX(0, loyalty_points - ?) + ?,
                                 total_spent_ksh = total_spent_ksh + ?,
                                 last_visit = ?
                             WHERE id = ?
                             """,
-                            (total_ksh, business_date, client_id),
+                            (15 if reward_redeemed else 0, loyalty_earned, total_ksh, business_date, client_id),
                         )
 
                     if appointment_id:
@@ -3020,10 +3068,11 @@ class SalonHandler(BaseHTTPRequestHandler):
                             """
                             UPDATE clients
                             SET visit_count = MAX(0, visit_count - 1),
+                                loyalty_points = MAX(0, loyalty_points - ?) + ?,
                                 total_spent_ksh = MAX(0, total_spent_ksh - ?)
                             WHERE id = ?
                             """,
-                            (tkt["total_ksh"], tkt["client_id"]),
+                            (int(tkt["loyalty_points_earned"] or 0), int(tkt["loyalty_points_redeemed"] or 0), tkt["total_ksh"], tkt["client_id"]),
                         )
 
                     if tkt["appointment_id"]:
@@ -3092,6 +3141,28 @@ class SalonHandler(BaseHTTPRequestHandler):
                     conn.commit()
                     updated = conn.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
                     self._send_json(200, {"user": _public_user(updated)})
+                    return
+
+                if path == "/api/expenses":
+                    category = body.get("category", "").strip()
+                    description = body.get("description", "").strip()
+                    expense_date = body.get("expense_date", datetime.date.today().isoformat()).strip()
+                    try:
+                        amount = int(body.get("amount_ksh", 0))
+                        datetime.date.fromisoformat(expense_date)
+                    except (TypeError, ValueError):
+                        self._send_json(400, {"error": "Enter a valid expense date and whole KSh amount."})
+                        return
+                    if not category or len(category) > 80 or len(description) > 240 or amount <= 0:
+                        self._send_json(400, {"error": "Category is required, description must be under 240 characters and amount must be positive."})
+                        return
+                    expense_id = f"exp-{uuid.uuid4().hex[:10]}"
+                    now = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute("INSERT INTO salon_expenses (id, category, description, amount_ksh, expense_date, created_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (expense_id, category, description, amount, expense_date, user["name"], now))
+                    _record_audit_event(conn, user, "create", "expense", f"Recorded {category} expense of KSh {amount:,}.", expense_id)
+                    conn.commit()
+                    row = dict(conn.execute("SELECT * FROM salon_expenses WHERE id = ?", (expense_id,)).fetchone())
+                    self._send_json(201, {"expense": row})
                     return
 
                 if path == "/api/settings/business":
@@ -3335,6 +3406,32 @@ class SalonHandler(BaseHTTPRequestHandler):
                     conn.commit()
                     updated = [a for a in fetch_appointments(conn, new_date) if a["id"] == apt_id]
                     self._send_json(200, {"appointment": updated[0] if updated else None})
+                    return
+
+                if path.startswith("/api/expenses/"):
+                    expense_id = path.split("/")[-1]
+                    existing_expense = conn.execute("SELECT * FROM salon_expenses WHERE id = ?", (expense_id,)).fetchone()
+                    if not existing_expense:
+                        self._send_json(404, {"error": "Expense not found."})
+                        return
+                    category = body.get("category", existing_expense["category"]).strip()
+                    description = body.get("description", existing_expense["description"]).strip()
+                    expense_date = body.get("expense_date", existing_expense["expense_date"]).strip()
+                    try:
+                        amount = int(body.get("amount_ksh", existing_expense["amount_ksh"]))
+                        datetime.date.fromisoformat(expense_date)
+                    except (TypeError, ValueError):
+                        self._send_json(400, {"error": "Enter a valid expense date and whole KSh amount."})
+                        return
+                    if not category or len(category) > 80 or len(description) > 240 or amount <= 0:
+                        self._send_json(400, {"error": "Category is required, description must be under 240 characters and amount must be positive."})
+                        return
+                    now = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute("UPDATE salon_expenses SET category = ?, description = ?, amount_ksh = ?, expense_date = ?, updated_at = ? WHERE id = ?", (category, description, amount, expense_date, now, expense_id))
+                    _record_audit_event(conn, user, "update", "expense", f"Updated {category} expense to KSh {amount:,}.", expense_id)
+                    conn.commit()
+                    row = dict(conn.execute("SELECT * FROM salon_expenses WHERE id = ?", (expense_id,)).fetchone())
+                    self._send_json(200, {"expense": row})
                     return
 
                 if path.startswith("/api/clients/"):

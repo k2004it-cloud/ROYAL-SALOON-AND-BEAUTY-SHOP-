@@ -109,17 +109,23 @@ export function PosView({
     [cart]
   );
 
+  const selectedClient = clients.find((client) => client.id === selectedClientId);
+  const loyaltyDiscountKsh = selectedClient && (selectedClient.loyalty_points || 0) >= 15
+    ? Math.ceil((cart.find((line) => line.kind === 'service')?.unit_price_ksh || 0) / 2)
+    : 0;
+  const discountedSubtotalKsh = Math.max(0, subtotalKsh - loyaltyDiscountKsh);
+
   const discountKsh = useMemo(() => {
     if (discountType === 'percent') {
-      return Math.round((subtotalKsh * Math.min(Math.max(discountValue, 0), 100)) / 100);
+      return Math.round((discountedSubtotalKsh * Math.min(Math.max(discountValue, 0), 100)) / 100);
     }
     if (discountType === 'fixed') {
-      return Math.min(Math.round(Math.max(discountValue, 0)), subtotalKsh);
+      return Math.min(Math.round(Math.max(discountValue, 0)), discountedSubtotalKsh);
     }
     return 0;
-  }, [subtotalKsh, discountType, discountValue]);
+  }, [discountedSubtotalKsh, discountType, discountValue]);
 
-  const totalKsh = Math.max(0, subtotalKsh - discountKsh);
+  const totalKsh = Math.max(0, discountedSubtotalKsh - discountKsh);
   const tipKsh = Math.max(0, Math.round(Number(tipInput) || 0));
   const totalWithTipKsh = totalKsh + tipKsh;
   const vatIncludedKsh = Math.round((totalKsh * 16) / 116);
@@ -141,7 +147,6 @@ export function PosView({
     setErrorMsg('');
     setSettling(true);
     try {
-      const selectedClient = clients.find((c) => c.id === selectedClientId);
       const settled = await onCheckout({
         client_id: selectedClientId,
         client_name: selectedClient ? selectedClient.name : 'Walk-In Guest',
@@ -586,6 +591,12 @@ export function PosView({
                 {formatKsh(subtotalKsh)}
               </span>
             </div>
+            {loyaltyDiscountKsh > 0 && (
+              <div className="flex justify-between font-semibold text-emerald-700">
+                <span>Loyalty reward (50% off one service)</span>
+                <span className="tabular-ksh">- {formatKsh(loyaltyDiscountKsh)}</span>
+              </div>
+            )}
             {tipKsh > 0 && (
               <div className="flex justify-between text-[#6D28D9]">
                 <span>Stylist tip</span>
