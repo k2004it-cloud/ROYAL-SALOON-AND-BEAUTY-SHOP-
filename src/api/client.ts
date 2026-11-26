@@ -23,6 +23,7 @@ import type {
   SupportRequest,
   SupportRequestStatus,
   Ticket,
+  TrainingOverview,
 } from '../types';
 
 async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
@@ -168,6 +169,15 @@ export const salonApi = {
     notes: string;
   }): Promise<{ payout: CommissionPayout }> {
     return apiRequest('/api/payroll/payouts', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  trainingOverview(date?: string): Promise<TrainingOverview> {
+    const query = date ? `?date=${encodeURIComponent(date)}` : '';
+    return apiRequest(`/api/training${query}`);
+  },
+
+  updateTrainingDay(day_of_week: number): Promise<{ day_of_week: number }> {
+    return apiRequest('/api/training/settings', { method: 'PATCH', body: JSON.stringify({ day_of_week }) });
   },
 
   employeeAttendance(start: string, end: string): Promise<{ records: AttendanceRecord[] }> {

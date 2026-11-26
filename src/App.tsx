@@ -36,13 +36,14 @@ import { InventoryReportsView } from './components/InventoryReportsView';
 import { PayrollView } from './components/PayrollView';
 import { ExpensesView, LoyaltyView } from './components/BusinessTrackingViews';
 import { SuperadminView } from './components/SuperadminView';
+import { TrainingView } from './components/TrainingView';
 import { Bell, CalendarDays, ChevronDown, Crown, LogOut, Menu, Search } from 'lucide-react';
 
 const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
   superadmin: [
     'dashboard', 'superadmin', 'clients', 'loyalty', 'expenses', 'employees', 'catalog',
     'schedule', 'pos', 'inventory', 'reports', 'payroll', 'attendance', 'tasks',
-    'notifications', 'settings', 'system-logs', 'backups', 'support',
+    'notifications', 'settings', 'system-logs', 'backups', 'support', 'training',
   ],
   admin: [
     'dashboard',
@@ -63,6 +64,7 @@ const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
     'system-logs',
     'backups',
     'support',
+    'training',
   ],
   employee: [
     'my-day',
@@ -81,6 +83,7 @@ const ROLE_TABS: Record<StaffRole, WorkspaceTab[]> = {
     'expenses',
     'inventory',
     'reports',
+    'training',
   ],
 };
 
@@ -815,6 +818,7 @@ export default function App() {
           {activeTab === 'superadmin' && authUser.role === 'superadmin' && <SuperadminView onNavigate={navigateToTab} />}
           {activeTab === 'loyalty' && <LoyaltyView clients={data.clients} />}
           {activeTab === 'expenses' && <ExpensesView />}
+          {activeTab === 'training' && <TrainingView user={authUser} />}
           {activeTab === 'timesheet' && authUser.role === 'employee' && <EmployeeAttendanceView openingTime={data.business_settings.opening_time} />}
           {activeTab === 'attendance' && isAdminRole(authUser.role) && <AttendanceView openingTime={data.business_settings.opening_time} />}
           {activeTab === 'tasks' && <TasksView user={authUser} />}

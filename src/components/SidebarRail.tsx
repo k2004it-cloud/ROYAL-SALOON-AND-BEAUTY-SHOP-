@@ -23,6 +23,7 @@ import {
   Gift,
   ReceiptText,
   ShieldCheck,
+  GraduationCap,
 } from 'lucide-react';
 import { isAdminRole, type StaffUser, type WorkspaceTab } from '../types';
 
@@ -66,6 +67,7 @@ const ADMIN_NAV_ITEMS: Array<{
   { id: 'system-logs', label: 'System Logs', shortLabel: 'Logs', Icon: ClipboardList },
   { id: 'backups', label: 'Backups', shortLabel: 'Backups', Icon: Database },
   { id: 'support', label: 'Support & Help', shortLabel: 'Help', Icon: CircleHelp },
+  { id: 'training', label: 'Training Day', shortLabel: 'Training', Icon: GraduationCap },
 ];
 
 const EMPLOYEE_NAV_ITEMS: Array<{
@@ -88,6 +90,7 @@ const EMPLOYEE_NAV_ITEMS: Array<{
   { id: 'notifications', label: 'Notifications', shortLabel: 'Alerts', Icon: Bell },
   { id: 'reports', label: 'Reports', shortLabel: 'Reports', Icon: BarChart3 },
   { id: 'support', label: 'Help & Support', shortLabel: 'Help', Icon: CircleHelp },
+  { id: 'training', label: 'Training Day', shortLabel: 'Training', Icon: GraduationCap },
 ];
 
 const SUPERADMIN_NAV_ITEM = { id: 'superadmin' as const, label: 'Superadmin', shortLabel: 'Owner', Icon: ShieldCheck };

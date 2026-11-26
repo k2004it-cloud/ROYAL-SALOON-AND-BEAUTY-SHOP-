@@ -184,6 +184,7 @@ def init_db() -> None:
                     "catalog_items", "clients", "appointments", "tickets", "ticket_items",
                     "commission_payouts", "commission_payout_items", "attendance_records",
                     "staff_tasks", "inventory_reports", "salon_expenses",
+                    "training_settings",
                 }
                 existing_tables = {
                     row["table_name"]
@@ -265,6 +266,13 @@ def init_db() -> None:
                 address TEXT NOT NULL DEFAULT '',
                 opening_time TEXT NOT NULL DEFAULT '09:00',
                 closing_time TEXT NOT NULL DEFAULT '19:30',
+                updated_at TEXT NOT NULL,
+                updated_by TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS training_settings (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                day_of_week INTEGER CHECK(day_of_week BETWEEN 0 AND 6),
                 updated_at TEXT NOT NULL,
                 updated_by TEXT NOT NULL DEFAULT ''
             );
@@ -522,6 +530,10 @@ def init_db() -> None:
                 (id, business_name, phone, email, address, opening_time, closing_time, updated_at, updated_by)
             VALUES (1, 'Royal Saloon & Beauty Hub', '', '', '', '09:00', '19:30', ?, '')
             """,
+            (datetime.datetime.now().isoformat(timespec="seconds"),),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO training_settings (id, day_of_week, updated_at, updated_by) VALUES (1, NULL, ?, '')",
             (datetime.datetime.now().isoformat(timespec="seconds"),),
         )
 
@@ -1547,6 +1559,79 @@ class SalonHandler(BaseHTTPRequestHandler):
                         "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
                     }
                     self._send_json(200, diagnostics)
+                    return
+
+                if path == "/api/training":
+                    training_settings = conn.execute("SELECT day_of_week FROM training_settings WHERE id = 1").fetchone()
+                    day_of_week = training_settings["day_of_week"] if training_settings else None
+                    training_date = None
+                    metrics = None
+                    employee_commissions = []
+                    my_commission = 0
+                    requested_date = qs.get("date", [None])[0]
+                    if day_of_week is not None:
+                        if requested_date:
+                            try:
+                                training_date = datetime.date.fromisoformat(requested_date)
+                            except ValueError:
+                                self._send_json(400, {"error": "Enter a valid training date."})
+                                return
+                            if training_date.weekday() != day_of_week or training_date > datetime.date.today():
+                                self._send_json(400, {"error": "Choose a past or current date that matches the weekly training day."})
+                                return
+                        else:
+                            current_date = datetime.date.today()
+                            days_since_training = (current_date.weekday() - int(day_of_week)) % 7
+                            training_date = current_date - datetime.timedelta(days=days_since_training)
+                        training_date_text = training_date.isoformat()
+                        if user["role"] == "employee":
+                            if user["stylist_id"]:
+                                own_row = conn.execute(
+                                    "SELECT COALESCE(SUM(ti.commission_ksh), 0) AS commission_ksh FROM ticket_items ti JOIN tickets t ON t.id = ti.ticket_id WHERE t.status = 'Paid' AND t.business_date = ? AND ti.stylist_id = ?",
+                                    (training_date_text, user["stylist_id"]),
+                                ).fetchone()
+                                my_commission = int(own_row["commission_ksh"] or 0)
+                        else:
+                            sales_row = conn.execute(
+                                "SELECT COALESCE(SUM(total_ksh), 0) AS sales_ksh, COUNT(DISTINCT COALESCE(NULLIF(client_id, ''), lower(client_name))) AS clients FROM tickets WHERE status = 'Paid' AND business_date = ?",
+                                (training_date_text,),
+                            ).fetchone()
+                            commission_row = conn.execute(
+                                "SELECT COALESCE(SUM(ti.commission_ksh), 0) AS commission_ksh FROM ticket_items ti JOIN tickets t ON t.id = ti.ticket_id WHERE t.status = 'Paid' AND t.business_date = ?",
+                                (training_date_text,),
+                            ).fetchone()
+                            expense_row = conn.execute(
+                                "SELECT COALESCE(SUM(amount_ksh), 0) AS expenses_ksh FROM salon_expenses WHERE expense_date = ?",
+                                (training_date_text,),
+                            ).fetchone()
+                            total_sales = int(sales_row["sales_ksh"] or 0)
+                            total_commission = int(commission_row["commission_ksh"] or 0)
+                            expenses = int(expense_row["expenses_ksh"] or 0)
+                            metrics = {
+                                "total_sales_ksh": total_sales,
+                                "total_clients": int(sales_row["clients"] or 0),
+                                "total_commission_ksh": total_commission,
+                                "expenses_ksh": expenses,
+                                "profit_ksh": total_sales - total_commission - expenses,
+                            }
+                            employee_rows = conn.execute(
+                                "SELECT u.id AS user_id, u.name, COALESCE(SUM(ti.commission_ksh), 0) AS commission_ksh FROM users u LEFT JOIN ticket_items ti ON ti.stylist_id = u.stylist_id AND ti.ticket_id IN (SELECT id FROM tickets WHERE status = 'Paid' AND business_date = ?) WHERE u.role = 'employee' AND u.active = 1 GROUP BY u.id, u.name ORDER BY u.name",
+                                (training_date_text,),
+                            ).fetchall()
+                            employee_commissions = [{"user_id": row["user_id"], "name": row["name"], "commission_ksh": int(row["commission_ksh"] or 0)} for row in employee_rows]
+                            if user["stylist_id"]:
+                                own_row = conn.execute(
+                                    "SELECT COALESCE(SUM(ti.commission_ksh), 0) AS commission_ksh FROM ticket_items ti JOIN tickets t ON t.id = ti.ticket_id WHERE t.status = 'Paid' AND t.business_date = ? AND ti.stylist_id = ?",
+                                    (training_date_text, user["stylist_id"]),
+                                ).fetchone()
+                                my_commission = int(own_row["commission_ksh"] or 0)
+                    self._send_json(200, {
+                        "day_of_week": day_of_week,
+                        "training_date": training_date.isoformat() if training_date else None,
+                        "metrics": metrics,
+                        "my_commission_ksh": my_commission,
+                        "employee_commissions": employee_commissions,
+                    })
                     return
 
                 if path == "/api/settings/business":
@@ -3202,6 +3287,21 @@ class SalonHandler(BaseHTTPRequestHandler):
                     conn.commit()
                     updated = conn.execute("SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
                     self._send_json(200, {"user": _public_user(updated)})
+                    return
+
+                if path == "/api/training/settings":
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required to choose the weekly training day."})
+                        return
+                    day_of_week = body.get("day_of_week")
+                    if isinstance(day_of_week, bool) or not isinstance(day_of_week, int) or not 0 <= day_of_week <= 6:
+                        self._send_json(400, {"error": "Choose a day of the week for training."})
+                        return
+                    now = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute("UPDATE training_settings SET day_of_week = ?, updated_at = ?, updated_by = ? WHERE id = 1", (day_of_week, now, user["name"]))
+                    _record_audit_event(conn, user, "update", "training_schedule", f"Weekly training day set to {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][day_of_week]}.")
+                    conn.commit()
+                    self._send_json(200, {"day_of_week": day_of_week})
                     return
 
                 if path == "/api/expenses":

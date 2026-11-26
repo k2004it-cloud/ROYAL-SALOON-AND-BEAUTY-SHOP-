@@ -23,7 +23,8 @@ export type WorkspaceTab =
   | 'superadmin'
   | 'loyalty'
   | 'expenses'
-  | 'support';
+  | 'support'
+  | 'training';
 
 export type StaffRole = 'superadmin' | 'admin' | 'employee';
 
@@ -372,6 +373,20 @@ export interface EmployeeDashboard {
   overdue_tasks_count: number;
   low_stock_items: Array<{ id: string; name: string; stock_qty: number }>;
   weekly_revenue: DailyRevenuePoint[];
+}
+
+export interface TrainingOverview {
+  day_of_week: number | null;
+  training_date: string | null;
+  metrics: {
+    total_sales_ksh: number;
+    total_clients: number;
+    total_commission_ksh: number;
+    expenses_ksh: number;
+    profit_ksh: number;
+  } | null;
+  my_commission_ksh: number;
+  employee_commissions: Array<{ user_id: string; name: string; commission_ksh: number }>;
 }
 
 export interface CartLine {
