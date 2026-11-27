@@ -3474,6 +3474,28 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"voided": True, "ticket_id": ticket_id})
                     return
 
+                if path == "/api/expenses":
+                    category = body.get("category", "").strip()
+                    description = body.get("description", "").strip()
+                    expense_date = body.get("expense_date", datetime.date.today().isoformat()).strip()
+                    try:
+                        amount = int(body.get("amount_ksh", 0))
+                        datetime.date.fromisoformat(expense_date)
+                    except (TypeError, ValueError):
+                        self._send_json(400, {"error": "Enter a valid expense date and whole KSh amount."})
+                        return
+                    if not category or len(category) > 80 or len(description) > 240 or amount <= 0:
+                        self._send_json(400, {"error": "Category is required, description must be under 240 characters and amount must be positive."})
+                        return
+                    expense_id = f"exp-{uuid.uuid4().hex[:10]}"
+                    now = datetime.datetime.now().isoformat(timespec="seconds")
+                    conn.execute("INSERT INTO salon_expenses (id, category, description, amount_ksh, expense_date, created_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (expense_id, category, description, amount, expense_date, user["name"], now))
+                    _record_audit_event(conn, user, "create", "expense", f"Recorded {category} expense of KSh {amount:,}.", expense_id)
+                    conn.commit()
+                    row = dict(conn.execute("SELECT * FROM salon_expenses WHERE id = ?", (expense_id,)).fetchone())
+                    self._send_json(201, {"expense": row})
+                    return
+
                 self._send_json(404, {"error": f"Unknown endpoint: {path}"})
             except Exception as exc:
                 conn.rollback()
@@ -3556,28 +3578,6 @@ class SalonHandler(BaseHTTPRequestHandler):
                     _record_audit_event(conn, user, "update", "training_schedule", f"Weekly training day set to {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][day_of_week]}.")
                     conn.commit()
                     self._send_json(200, {"day_of_week": day_of_week})
-                    return
-
-                if path == "/api/expenses":
-                    category = body.get("category", "").strip()
-                    description = body.get("description", "").strip()
-                    expense_date = body.get("expense_date", datetime.date.today().isoformat()).strip()
-                    try:
-                        amount = int(body.get("amount_ksh", 0))
-                        datetime.date.fromisoformat(expense_date)
-                    except (TypeError, ValueError):
-                        self._send_json(400, {"error": "Enter a valid expense date and whole KSh amount."})
-                        return
-                    if not category or len(category) > 80 or len(description) > 240 or amount <= 0:
-                        self._send_json(400, {"error": "Category is required, description must be under 240 characters and amount must be positive."})
-                        return
-                    expense_id = f"exp-{uuid.uuid4().hex[:10]}"
-                    now = datetime.datetime.now().isoformat(timespec="seconds")
-                    conn.execute("INSERT INTO salon_expenses (id, category, description, amount_ksh, expense_date, created_by_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (expense_id, category, description, amount, expense_date, user["name"], now))
-                    _record_audit_event(conn, user, "create", "expense", f"Recorded {category} expense of KSh {amount:,}.", expense_id)
-                    conn.commit()
-                    row = dict(conn.execute("SELECT * FROM salon_expenses WHERE id = ?", (expense_id,)).fetchone())
-                    self._send_json(201, {"expense": row})
                     return
 
                 if path == "/api/settings/business":
