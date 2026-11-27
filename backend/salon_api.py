@@ -1480,7 +1480,7 @@ def outstanding_commission_items(conn: sqlite3.Connection, stylist_id: str) -> l
         JOIN tickets t ON t.id = ti.ticket_id
         LEFT JOIN commission_payout_items pi ON pi.ticket_item_id = ti.id
         WHERE ti.stylist_id = ? AND ti.commission_ksh > 0 AND t.status = 'Paid'
-        GROUP BY ti.id
+        GROUP BY ti.id, t.business_date, t.created_at
         HAVING ti.commission_ksh > COALESCE(SUM(pi.amount_ksh), 0)
         ORDER BY t.business_date, t.created_at, ti.id
         """,
