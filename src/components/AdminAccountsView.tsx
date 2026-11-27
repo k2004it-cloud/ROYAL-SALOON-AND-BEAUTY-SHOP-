@@ -83,6 +83,16 @@ export function AdminAccountsView({ onNotify }: { onNotify: (message: string) =>
     }
   };
 
+  const copyTemporaryPassword = async () => {
+    if (!temporaryCredential) return;
+    try {
+      await navigator.clipboard.writeText(temporaryCredential.password);
+      onNotify('Temporary password copied');
+    } catch {
+      setError('Copy was unavailable. Select and copy the temporary password shown below.');
+    }
+  };
+
   return (
     <section className="salon-card space-y-5 rounded-2xl p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -92,7 +102,7 @@ export function AdminAccountsView({ onNotify }: { onNotify: (message: string) =>
 
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{error}</p>}
 
-      {temporaryCredential && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-950">Temporary login for the Admin</p><p className="mt-1 text-xs text-amber-900">Share these credentials securely. The previous sessions have been signed out.</p><p className="mt-3 select-all font-mono text-sm text-[#14213D]">Username: {temporaryCredential.username}<br />Temporary password: {temporaryCredential.password}</p><button type="button" onClick={() => void copyCredential()} className="mt-3 rounded-lg border border-amber-400 px-3 py-2 text-xs font-bold text-amber-950">Copy login</button><button type="button" onClick={() => setTemporaryCredential(null)} className="ml-2 rounded-lg px-3 py-2 text-xs font-semibold text-amber-900">Hide</button></div>}
+      {temporaryCredential && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-950">Temporary password for the Admin</p><p className="mt-1 text-xs text-amber-900">The username stays the same. Copy this temporary password and share it securely. The Admin must choose a new password after signing in. Previous sessions have been signed out.</p><p className="mt-3 select-all font-mono text-sm text-[#14213D]">Username: {temporaryCredential.username}<br />Temporary password: {temporaryCredential.password}</p><button type="button" onClick={() => void copyTemporaryPassword()} className="mt-3 rounded-lg border border-amber-400 px-3 py-2 text-xs font-bold text-amber-950">Copy temporary password</button><button type="button" onClick={() => void copyCredential()} className="ml-2 mt-3 rounded-lg border border-amber-400 px-3 py-2 text-xs font-bold text-amber-950">Copy login details</button><button type="button" onClick={() => setTemporaryCredential(null)} className="ml-2 rounded-lg px-3 py-2 text-xs font-semibold text-amber-900">Hide</button></div>}
 
       {formOpen && <form onSubmit={handleCreate} className="grid gap-3 rounded-xl border border-[#E1E7F0] bg-[#F8FAFD] p-4 sm:grid-cols-2">
         <label className="text-xs font-semibold text-[#344054]">Admin name<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={120} className="salon-input mt-1 w-full px-3 text-sm" /></label>

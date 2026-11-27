@@ -110,6 +110,16 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
     }
   };
 
+  const copyTemporaryPassword = async () => {
+    if (!temporaryCredential) return;
+    try {
+      await navigator.clipboard.writeText(temporaryCredential.password);
+      onNotify('Temporary password copied');
+    } catch {
+      setError('Copy was unavailable. Select and copy the temporary password shown below.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -148,7 +158,7 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
         </p>
       )}
 
-      {temporaryCredential && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-950">Temporary login for {temporaryCredential.name}</p><p className="mt-1 text-xs text-amber-900">Share these credentials securely. Their previous sessions have been signed out.</p><p className="mt-3 select-all font-mono text-sm text-[#14213D]">Username: {temporaryCredential.username}<br />Temporary password: {temporaryCredential.password}</p><button type="button" onClick={() => void copyTemporaryCredential()} className="mt-3 rounded-lg border border-amber-400 px-3 py-2 text-xs font-bold text-amber-950">Copy login</button><button type="button" onClick={() => setTemporaryCredential(null)} className="ml-2 rounded-lg px-3 py-2 text-xs font-semibold text-amber-900">Hide</button></div>}
+      {temporaryCredential && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-950">Temporary password for {temporaryCredential.name}</p><p className="mt-1 text-xs text-amber-900">The username stays the same. Copy this temporary password and share it securely. The employee must choose a new password after signing in. Previous sessions have been signed out.</p><p className="mt-3 select-all font-mono text-sm text-[#14213D]">Username: {temporaryCredential.username}<br />Temporary password: {temporaryCredential.password}</p><button type="button" onClick={() => void copyTemporaryPassword()} className="mt-3 rounded-lg border border-amber-400 px-3 py-2 text-xs font-bold text-amber-950">Copy temporary password</button><button type="button" onClick={() => void copyTemporaryCredential()} className="ml-2 mt-3 rounded-lg border border-amber-400 px-3 py-2 text-xs font-bold text-amber-950">Copy login details</button><button type="button" onClick={() => setTemporaryCredential(null)} className="ml-2 rounded-lg px-3 py-2 text-xs font-semibold text-amber-900">Hide</button></div>}
 
       {loading ? (
         <div className="salon-card rounded-2xl p-8 text-center text-sm text-[#667085]">
