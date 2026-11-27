@@ -182,6 +182,7 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
                   <p className="truncate text-xs text-[#64748B]">{employee.email}</p>
                   <p className="truncate text-xs text-[#64748B]">{employee.phone || 'Phone not added'}</p>
                   <p className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">{employee.job_title || 'Employee'}</p>
+                  {employee.password_change_required && <p className="mt-1 inline-flex rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-800">Temporary password: change required</p>}
                   <p className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-[#0B5ED7]">
                     <KeyRound className="h-3 w-3" />
                     Username & password access

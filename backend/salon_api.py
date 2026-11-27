@@ -804,7 +804,7 @@ def _public_user(row: sqlite3.Row | dict) -> dict:
         "stylist_id": row["stylist_id"] if "stylist_id" in row.keys() else "",
         "role": "superadmin" if ("is_superadmin" in row.keys() and bool(row["is_superadmin"])) else row["role"],
         "active": bool(row["active"]),
-        "password_change_required": bool(row["password_change_required"]),
+        "password_change_required": bool(row["password_change_required"]) if "password_change_required" in row.keys() else False,
     }
 
 
@@ -1956,7 +1956,7 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                 if path == "/api/employees":
                     employees = conn.execute(
-                        "SELECT id, name, username, email, phone, job_title, stylist_id, avatar_url, role, active, created_at FROM users WHERE role = 'employee' ORDER BY name"
+                        "SELECT id, name, username, email, phone, job_title, stylist_id, avatar_url, role, active, password_change_required, created_at FROM users WHERE role = 'employee' ORDER BY name"
                     ).fetchall()
                     self._send_json(200, {"employees": [_public_user(row) | {"created_at": row["created_at"]} for row in employees]})
                     return
