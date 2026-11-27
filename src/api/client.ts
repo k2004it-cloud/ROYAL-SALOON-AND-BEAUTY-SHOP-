@@ -100,7 +100,7 @@ export const salonApi = {
     return apiRequest('/api/auth/setup/superadmin', { method: 'POST', body: JSON.stringify(payload) });
   },
 
-  login(payload: { username: string; password: string; role: 'superadmin' | 'admin' | 'employee' }): Promise<{ user: StaffUser }> {
+  login(payload: { username: string; password: string }): Promise<{ user: StaffUser }> {
     return apiRequest('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
   },
 

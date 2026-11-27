@@ -107,7 +107,7 @@ function tabFromPath(path: string, role: StaffRole): WorkspaceTab {
 
 function pathForTab(role: StaffRole, tab: WorkspaceTab): string {
   if (!ROLE_TABS[role].includes(tab)) return `/${role}`;
-  if (tab === defaultTabForRole(role)) return `/${role}`;
+  if (tab === defaultTabForRole(role)) return `/${role}/dashboard`;
   return `/${role}/${tab}`;
 }
 
@@ -261,7 +261,10 @@ export default function App() {
         navigatePath(pathForTab(authUser.role, defaultTabForRole(authUser.role)), true);
         return;
       }
-      if (routeRole !== authUser.role) return;
+      if (routeRole !== authUser.role) {
+        navigatePath(pathForTab(authUser.role, defaultTabForRole(authUser.role)), true);
+        return;
+      }
       const canonicalPath = pathForTab(authUser.role, tabFromPath(currentPath, authUser.role));
       if (canonicalPath !== currentPath) navigatePath(canonicalPath, true);
     } else if (currentPath !== '/' && !roleFromPath(currentPath)) {
@@ -375,7 +378,6 @@ export default function App() {
   const handleLogin = async (payload: {
     username: string;
     password: string;
-    role: StaffRole;
   }) => {
     setAuthBusy(true);
     setAuthError('');
@@ -395,12 +397,11 @@ export default function App() {
 
   const handleLogout = async () => {
     setAuthError('');
-    const role = authUser?.role;
     try {
       await salonApi.logout();
       setAuthUser(null);
       setData(null);
-      navigatePath(role ? `/${role}/login` : '/');
+      navigatePath('/', true);
       setLoading(true);
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Unable to sign out.');
@@ -581,7 +582,6 @@ export default function App() {
   };
 
   const routeRole = roleFromPath(currentPath);
-  const isRoleSwitchLogin = Boolean(authUser && routeRole && routeRole !== authUser.role);
   const searchItems: Array<{ label: string; tab: WorkspaceTab }> = authUser?.role === 'employee'
     ? [
         { label: 'Staff Dashboard', tab: 'my-day' },
@@ -648,7 +648,7 @@ export default function App() {
     );
   }
 
-  if (authUser && !isRoleSwitchLogin && routeRole !== authUser.role) {
+  if (authUser && routeRole !== authUser.role) {
     return (
       <div className="min-h-screen flex flex-col bg-transparent p-6">
         <div className="flex flex-1 items-center justify-center">
@@ -659,20 +659,14 @@ export default function App() {
     );
   }
 
-  if (!authUser || isRoleSwitchLogin) {
+  if (!authUser) {
     return (
       <AuthView
-        role={roleFromPath(currentPath)}
-        setupRequired={setupRequired}
-        adminSetupRequired={adminSetupRequired}
-        superadminSetupRequired={superadminSetupRequired}
         demoMode={demoMode}
         connectionError={authConnectionError}
         error={authError}
         busy={authBusy}
-        onSetup={handleSetupAdmin}
         onLogin={handleLogin}
-        onNavigate={(path) => navigatePath(path)}
         onRetry={() => void checkAuthStatus()}
       />
     );

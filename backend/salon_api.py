@@ -2411,7 +2411,6 @@ class SalonHandler(BaseHTTPRequestHandler):
                 if path == "/api/auth/login":
                     username = body.get("username", "").strip().lower()
                     password = body.get("password", "")
-                    expected_role = body.get("role", "")
                     account_key = hashlib.sha256(username.encode("utf-8")).hexdigest()
                     now_epoch = int(time.time())
                     attempt = conn.execute(
@@ -2423,13 +2422,11 @@ class SalonHandler(BaseHTTPRequestHandler):
                         return
 
                     user = conn.execute(
-                        "SELECT * FROM users WHERE username = ? AND active = 1",
+                        "SELECT * FROM users WHERE lower(username) = ? AND active = 1",
                         (username,),
                     ).fetchone()
                     valid_credential = bool(
                         user
-                        and expected_role in ("superadmin", "admin", "employee")
-                        and _public_user(user)["role"] == expected_role
                         and password
                         and _credential_matches(password, user["password_salt"], user["password_hash"])
                     )
@@ -2452,7 +2449,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         if attempts >= 15:
                             self._send_json(429, {"error": "Too many sign-in attempts. Try again in 15 minutes."})
                             return
-                        self._send_json(401, {"error": "Username, password, or access link is incorrect."})
+                        self._send_json(401, {"error": "Username or password is incorrect."})
                         return
 
                     conn.execute("DELETE FROM auth_attempts WHERE account_key = ?", (account_key,))
