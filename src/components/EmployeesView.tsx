@@ -209,8 +209,8 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
       )}
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#071426]/50 p-4">
-          <section className="salon-sheet w-full max-w-lg space-y-5 rounded-2xl p-6">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-[#071426]/50 p-4 sm:items-center">
+          <section className="salon-sheet my-auto max-h-[calc(100dvh-2rem)] w-full max-w-lg space-y-5 overflow-y-auto overscroll-contain rounded-2xl p-6">
             <div className="flex items-center justify-between border-b border-[#E1E7F0] pb-4">
               <div>
                 <h2 className="font-serif-editorial text-2xl font-semibold text-[#14213D]">Add Employee</h2>
