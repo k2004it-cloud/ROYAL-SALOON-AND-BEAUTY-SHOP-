@@ -2930,6 +2930,31 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(201, {"admin": _public_user(admin) | {"created_at": admin["created_at"]}})
                     return
 
+                if path.startswith("/api/superadmin/users/") and path.endswith("/reset-password"):
+                    if not bool(user["is_superadmin"]):
+                        self._send_json(403, {"error": "Superadmin access is required to reset account passwords."})
+                        return
+                    account_id = path.split("/")[-2]
+                    account = conn.execute(
+                        "SELECT * FROM users WHERE id = ? AND role IN ('admin', 'employee') AND is_superadmin = 0",
+                        (account_id,),
+                    ).fetchone()
+                    if not account:
+                        self._send_json(404, {"error": "Admin or employee account not found."})
+                        return
+                    temporary_password = secrets.token_urlsafe(15)
+                    password_salt, password_digest = _credential_hash(temporary_password)
+                    conn.execute("UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?", (password_salt, password_digest, account_id))
+                    conn.execute("DELETE FROM sessions WHERE user_id = ?", (account_id,))
+                    conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (account_id,))
+                    account_key = hashlib.sha256(account["username"].strip().lower().encode("utf-8")).hexdigest()
+                    conn.execute("DELETE FROM auth_attempts WHERE account_key = ?", (account_key,))
+                    entity_type = "admin_account" if account["role"] == "admin" else "employee"
+                    _record_audit_event(conn, user, "reset_password", entity_type, f"Temporary password issued for @{account['username']}; prior sessions revoked.", account_id)
+                    conn.commit()
+                    self._send_json(200, {"temporary_password": temporary_password, "username": account["username"], "role": account["role"]})
+                    return
+
                 if path.startswith("/api/superadmin/admins/") and path.endswith("/reset-password"):
                     if not bool(user["is_superadmin"]):
                         self._send_json(403, {"error": "Superadmin access is required to reset an Admin password."})

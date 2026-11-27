@@ -24,6 +24,7 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [temporaryCredential, setTemporaryCredential] = useState<{ username: string; password: string; name: string } | null>(null);
 
   const loadEmployees = useCallback(async () => {
     setError('');
@@ -86,6 +87,29 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
     }
   };
 
+  const handleResetPassword = async (employee: StaffUser) => {
+    if (!window.confirm(`Reset the password for ${employee.name}? Their active sessions will be signed out.`)) return;
+    setError('');
+    setTemporaryCredential(null);
+    try {
+      const result = await salonApi.resetUserPassword(employee.id);
+      setTemporaryCredential({ username: result.username, password: result.temporary_password, name: employee.name });
+      onNotify('Temporary employee password created');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to reset employee password.');
+    }
+  };
+
+  const copyTemporaryCredential = async () => {
+    if (!temporaryCredential) return;
+    try {
+      await navigator.clipboard.writeText(`Username: ${temporaryCredential.username}\nTemporary password: ${temporaryCredential.password}`);
+      onNotify('Temporary login copied');
+    } catch {
+      setError('Copy was unavailable. Select and copy the temporary login shown below.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -123,6 +147,8 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
           {error}
         </p>
       )}
+
+      {temporaryCredential && <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-950">Temporary login for {temporaryCredential.name}</p><p className="mt-1 text-xs text-amber-900">Share these credentials securely. Their previous sessions have been signed out.</p><p className="mt-3 select-all font-mono text-sm text-[#14213D]">Username: {temporaryCredential.username}<br />Temporary password: {temporaryCredential.password}</p><button type="button" onClick={() => void copyTemporaryCredential()} className="mt-3 rounded-lg border border-amber-400 px-3 py-2 text-xs font-bold text-amber-950">Copy login</button><button type="button" onClick={() => setTemporaryCredential(null)} className="ml-2 rounded-lg px-3 py-2 text-xs font-semibold text-amber-900">Hide</button></div>}
 
       {loading ? (
         <div className="salon-card rounded-2xl p-8 text-center text-sm text-[#667085]">
@@ -164,6 +190,7 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
                   {employee.active ? <UserRoundX className="h-3.5 w-3.5" /> : <UserRound className="h-3.5 w-3.5" />}
                   {employee.active ? 'Disable access' : 'Enable access'}
                 </button>
+                {isSuperadmin && <button type="button" onClick={() => void handleResetPassword(employee)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#E1E7F0] px-3 text-xs font-semibold text-[#344054] hover:bg-[#F4F7FC]"><KeyRound className="h-3.5 w-3.5" />Reset password</button>}
               </div>
             </article>
           ))}

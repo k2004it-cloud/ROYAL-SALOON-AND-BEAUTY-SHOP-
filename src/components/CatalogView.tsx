@@ -49,6 +49,9 @@ export function CatalogView({
   const [savingCommissionFor, setSavingCommissionFor] = useState('');
   const [commissionError, setCommissionError] = useState('');
   const [stockQty, setStockQty] = useState('12');
+  const [restockQuantities, setRestockQuantities] = useState<Record<string, string>>({});
+  const [savingStockFor, setSavingStockFor] = useState('');
+  const [stockError, setStockError] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -114,6 +117,24 @@ export function CatalogView({
       setCommissionError(error instanceof Error ? error.message : 'Unable to update service commission.');
     } finally {
       setSavingCommissionFor('');
+    }
+  };
+
+  const restock = async (item: CatalogItem) => {
+    const quantity = Number(restockQuantities[item.id] ?? '1');
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10000) {
+      setStockError('Enter a whole-number restock quantity from 1 to 10,000.');
+      return;
+    }
+    setStockError('');
+    setSavingStockFor(item.id);
+    try {
+      await onAdjustStock(item.id, quantity);
+      setRestockQuantities((current) => ({ ...current, [item.id]: '1' }));
+    } catch (error) {
+      setStockError(error instanceof Error ? error.message : 'Unable to restock this product.');
+    } finally {
+      setSavingStockFor('');
     }
   };
 
@@ -193,6 +214,7 @@ export function CatalogView({
       </div>
 
       {commissionError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{commissionError}</p>}
+      {stockError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{stockError}</p>}
 
       {/* Table */}
       <div className="salon-card rounded-2xl overflow-hidden">
@@ -258,12 +280,23 @@ export function CatalogView({
                           >
                             <Minus className="h-3.5 w-3.5" />
                           </button>
+                          <input
+                            type="number"
+                            min="1"
+                            max="10000"
+                            step="1"
+                            aria-label={`Restock quantity for ${item.name}`}
+                            value={restockQuantities[item.id] ?? '1'}
+                            onChange={(event) => setRestockQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
+                            className="salon-input h-9 w-16 px-2 text-center text-xs tabular-ksh"
+                          />
                           <button
                             type="button"
-                            onClick={() => onAdjustStock(item.id, 5)}
-                            className="h-9 px-3 rounded-lg bg-[#EDE9FE] hover:bg-[#DDD6FE] text-[#6D28D9] text-xs font-bold tabular-ksh"
+                            onClick={() => void restock(item)}
+                            disabled={savingStockFor === item.id}
+                            className="h-9 px-3 rounded-lg bg-[#EDE9FE] hover:bg-[#DDD6FE] text-[#6D28D9] text-xs font-bold disabled:opacity-50"
                           >
-                            +5 Restock
+                            {savingStockFor === item.id ? 'Saving…' : 'Add stock'}
                           </button>
                         </div>
                       </td>

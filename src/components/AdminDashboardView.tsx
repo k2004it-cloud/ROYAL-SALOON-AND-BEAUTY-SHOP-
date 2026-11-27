@@ -456,12 +456,12 @@ export function AdminDashboardView({ userName, date, data, onNavigate }: AdminDa
     .filter((item) => item.kind === 'product')
     .reduce((total, item) => total + item.stock_qty, 0);
   const activeEmployeeCount = employees.filter((employee) => employee.active).length;
-  const stats = [
-    { label: 'Total clients', value: String(data.clients.length), Icon: UsersRound, color: 'from-[#0874F9] to-[#0757D8]', note: 'Client profiles' },
-    { label: "Today's bookings", value: String(activeAppointments.length), Icon: CalendarDays, color: 'from-[#7651E8] to-[#5636C9]', note: `${data.appointments.length} scheduled` },
-    { label: "Today's sales", value: formatKsh(data.analytics.gross_revenue_ksh), Icon: ShoppingCart, color: 'from-[#0BB981] to-[#008B62]', note: `${data.analytics.settled_tickets} settled tickets` },
-    { label: 'Products in stock', value: productStock.toLocaleString('en-KE'), Icon: Package, color: 'from-[#FFAB08] to-[#F47B0A]', note: `${data.analytics.low_stock_count} low-stock items` },
-    { label: 'Active employees', value: employeesLoading ? '—' : String(activeEmployeeCount), Icon: Users, color: 'from-[#0EAFD0] to-[#07839D]', note: employeesError ? 'Unavailable' : 'Active accounts' },
+  const stats: Array<{ label: string; value: string; Icon: typeof UsersRound; color: string; note: string; tab: WorkspaceTab }> = [
+    { label: 'Total clients', value: String(data.clients.length), Icon: UsersRound, color: 'from-[#0874F9] to-[#0757D8]', note: 'Client profiles', tab: 'clients' },
+    { label: "Today's bookings", value: String(activeAppointments.length), Icon: CalendarDays, color: 'from-[#7651E8] to-[#5636C9]', note: `${data.appointments.length} scheduled`, tab: 'schedule' },
+    { label: "Today's sales", value: formatKsh(data.analytics.gross_revenue_ksh), Icon: ShoppingCart, color: 'from-[#0BB981] to-[#008B62]', note: `${data.analytics.settled_tickets} settled tickets`, tab: 'pos' },
+    { label: 'Products in stock', value: productStock.toLocaleString('en-KE'), Icon: Package, color: 'from-[#FFAB08] to-[#F47B0A]', note: `${data.analytics.low_stock_count} low-stock items`, tab: 'inventory' },
+    { label: 'Active employees', value: employeesLoading ? '—' : String(activeEmployeeCount), Icon: Users, color: 'from-[#0EAFD0] to-[#07839D]', note: employeesError ? 'Unavailable' : 'Active accounts', tab: 'employees' },
   ];
 
   return (
@@ -483,8 +483,8 @@ export function AdminDashboardView({ userName, date, data, onNavigate }: AdminDa
       </section>
 
       <section aria-label="Salon summary" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {stats.map(({ label, value, Icon, color, note }) => (
-          <article key={label} className={`relative min-h-[84px] overflow-hidden rounded-2xl bg-gradient-to-br ${color} p-3 text-white shadow-[0_10px_22px_-16px_rgba(15,42,84,0.38)]`}>
+        {stats.map(({ label, value, Icon, color, note, tab }) => (
+          <button key={label} type="button" onClick={() => onNavigate(tab)} aria-label={`Open ${label}`} className={`relative min-h-[84px] overflow-hidden rounded-2xl bg-gradient-to-br ${color} p-3 text-left text-white shadow-[0_10px_22px_-16px_rgba(15,42,84,0.38)] transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14213D]`}>
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[10px] font-bold tracking-wide text-white/90">{label}</p>
@@ -495,7 +495,7 @@ export function AdminDashboardView({ userName, date, data, onNavigate }: AdminDa
                 <Icon className="h-4 w-4" />
               </span>
             </div>
-          </article>
+          </button>
         ))}
       </section>
 

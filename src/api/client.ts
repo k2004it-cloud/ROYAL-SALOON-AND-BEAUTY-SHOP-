@@ -140,6 +140,10 @@ export const salonApi = {
     return apiRequest(`/api/superadmin/admins/${encodeURIComponent(id)}/reset-password`, { method: 'POST', body: JSON.stringify({}) });
   },
 
+  resetUserPassword(id: string): Promise<{ username: string; temporary_password: string; role: 'admin' | 'employee' }> {
+    return apiRequest(`/api/superadmin/users/${encodeURIComponent(id)}/reset-password`, { method: 'POST', body: JSON.stringify({}) });
+  },
+
   updateEmployee(id: string, payload: { active?: boolean }): Promise<{ employee: StaffUser }> {
     return apiRequest(`/api/employees/${encodeURIComponent(id)}`, {
       method: 'PATCH',
