@@ -158,7 +158,7 @@ export const salonApi = {
     });
   },
 
-  changePassword(payload: { current_password: string; new_password: string }): Promise<{ changed: boolean }> {
+  changePassword(payload: { current_password?: string; new_password: string }): Promise<{ changed: boolean }> {
     return apiRequest('/api/auth/change-password', {
       method: 'POST',
       body: JSON.stringify(payload),

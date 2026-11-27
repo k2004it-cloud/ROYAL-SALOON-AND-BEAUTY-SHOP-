@@ -43,6 +43,7 @@ export interface StaffUser {
   stylist_id?: string;
   role: StaffRole;
   active: boolean;
+  password_change_required?: boolean;
   created_at?: string;
 }
 

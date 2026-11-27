@@ -202,6 +202,10 @@ def init_db() -> None:
                     )
 
                 conn.execute(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_required INTEGER NOT NULL DEFAULT 0"
+                )
+
+                conn.execute(
                     """
                     INSERT INTO business_settings
                         (id, business_name, phone, email, address, opening_time, closing_time, updated_at, updated_by)
@@ -234,6 +238,7 @@ def init_db() -> None:
                 avatar_url TEXT NOT NULL DEFAULT '',
                 role TEXT NOT NULL CHECK(role IN ('admin', 'employee')),
                 is_superadmin INTEGER NOT NULL DEFAULT 0,
+                password_change_required INTEGER NOT NULL DEFAULT 0,
                 active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             );
@@ -557,6 +562,8 @@ def init_db() -> None:
             cur.execute("ALTER TABLE users ADD COLUMN job_title TEXT NOT NULL DEFAULT ''")
         if "is_superadmin" not in user_columns:
             cur.execute("ALTER TABLE users ADD COLUMN is_superadmin INTEGER NOT NULL DEFAULT 0")
+        if "password_change_required" not in user_columns:
+            cur.execute("ALTER TABLE users ADD COLUMN password_change_required INTEGER NOT NULL DEFAULT 0")
         cur.execute("CREATE TABLE IF NOT EXISTS app_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)")
         if not cur.execute("SELECT 1 FROM app_migrations WHERE name = 'separate_superadmin_from_admin'").fetchone():
             # Remove the legacy first-admin promotion once, while preserving
@@ -797,6 +804,7 @@ def _public_user(row: sqlite3.Row | dict) -> dict:
         "stylist_id": row["stylist_id"] if "stylist_id" in row.keys() else "",
         "role": "superadmin" if ("is_superadmin" in row.keys() and bool(row["is_superadmin"])) else row["role"],
         "active": bool(row["active"]),
+        "password_change_required": bool(row["password_change_required"]),
     }
 
 
@@ -1617,6 +1625,10 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(401, {"error": "Sign in to continue."})
                     return
 
+                if bool(user["password_change_required"]):
+                    self._send_json(403, {"error": "Change your temporary password before continuing.", "password_change_required": True})
+                    return
+
                 if path == "/api/auth/me":
                     self._send_json(200, {"user": _public_user(user)})
                     return
@@ -2287,7 +2299,7 @@ class SalonHandler(BaseHTTPRequestHandler):
 
                 password_salt, password_digest = _credential_hash(new_password)
                 conn.execute(
-                    "UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?",
+                    "UPDATE users SET password_salt = ?, password_hash = ?, password_change_required = 0 WHERE id = ?",
                     (password_salt, password_digest, user["id"]),
                 )
                 conn.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
@@ -2489,16 +2501,20 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(401, {"error": "Sign in to continue."})
                     return
 
+                if bool(user["password_change_required"]) and path != "/api/auth/change-password":
+                    self._send_json(403, {"error": "Change your temporary password before continuing.", "password_change_required": True})
+                    return
+
                 if path == "/api/auth/change-password":
                     current_password = body.get("current_password")
                     new_password = body.get("new_password")
-                    if not isinstance(current_password, str) or not isinstance(new_password, str):
+                    if not isinstance(new_password, str) or (not bool(user["password_change_required"]) and not isinstance(current_password, str)):
                         self._send_json(400, {"error": "Enter your current and new passwords."})
                         return
                     if len(new_password) < 10 or len(new_password) > 128:
                         self._send_json(400, {"error": "New password must be between 10 and 128 characters."})
                         return
-                    if not _credential_matches(current_password, user["password_salt"], user["password_hash"]):
+                    if not bool(user["password_change_required"]) and not _credential_matches(current_password, user["password_salt"], user["password_hash"]):
                         self._send_json(401, {"error": "Current password is incorrect."})
                         return
                     password_salt, password_digest = _credential_hash(new_password)
@@ -2506,7 +2522,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         _session_token_from_cookie(self.headers.get("Cookie")).encode("utf-8")
                     ).hexdigest()
                     conn.execute(
-                        "UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?",
+                        "UPDATE users SET password_salt = ?, password_hash = ?, password_change_required = 0 WHERE id = ?",
                         (password_salt, password_digest, user["id"]),
                     )
                     conn.execute(
@@ -2944,7 +2960,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         return
                     temporary_password = secrets.token_urlsafe(15)
                     password_salt, password_digest = _credential_hash(temporary_password)
-                    conn.execute("UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?", (password_salt, password_digest, account_id))
+                    conn.execute("UPDATE users SET password_salt = ?, password_hash = ?, password_change_required = 1 WHERE id = ?", (password_salt, password_digest, account_id))
                     conn.execute("DELETE FROM sessions WHERE user_id = ?", (account_id,))
                     conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (account_id,))
                     account_key = hashlib.sha256(account["username"].strip().lower().encode("utf-8")).hexdigest()
@@ -2966,7 +2982,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                         return
                     temporary_password = secrets.token_urlsafe(15)
                     password_salt, password_digest = _credential_hash(temporary_password)
-                    conn.execute("UPDATE users SET password_salt = ?, password_hash = ? WHERE id = ?", (password_salt, password_digest, admin_id))
+                    conn.execute("UPDATE users SET password_salt = ?, password_hash = ?, password_change_required = 1 WHERE id = ?", (password_salt, password_digest, admin_id))
                     conn.execute("DELETE FROM sessions WHERE user_id = ?", (admin_id,))
                     conn.execute("DELETE FROM password_reset_tokens WHERE user_id = ?", (admin_id,))
                     account_key = hashlib.sha256(admin["username"].strip().lower().encode("utf-8")).hexdigest()
@@ -3457,6 +3473,10 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(401, {"error": "Sign in to continue."})
                     return
 
+                if bool(user["password_change_required"]):
+                    self._send_json(403, {"error": "Change your temporary password before continuing.", "password_change_required": True})
+                    return
+
                 if path == "/api/auth/profile":
                     name = body.get("name", user["name"])
                     email = body.get("email", user["email"])
@@ -3918,6 +3938,9 @@ class SalonHandler(BaseHTTPRequestHandler):
                 user = _current_user(conn, self.headers.get("Cookie"))
                 if not user:
                     self._send_json(401, {"error": "Sign in to continue."})
+                    return
+                if bool(user["password_change_required"]):
+                    self._send_json(403, {"error": "Change your temporary password before continuing.", "password_change_required": True})
                     return
                 if path.startswith("/api/appointments/"):
                     if user["role"] != "admin":

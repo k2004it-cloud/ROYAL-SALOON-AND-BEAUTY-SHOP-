@@ -23,6 +23,7 @@ import { ClientsView } from './components/ClientsView';
 import { CatalogView } from './components/CatalogView';
 import { LedgerView } from './components/LedgerView';
 import { AuthView } from './components/AuthView';
+import { ForcedPasswordChangeView } from './components/ForcedPasswordChangeView';
 import { PostLoginLoader } from './components/PostLoginLoader';
 import { EmployeesView } from './components/EmployeesView';
 import { AdminAccountsView } from './components/AdminAccountsView';
@@ -255,6 +256,14 @@ export default function App() {
 
   useEffect(() => {
     if (authChecking) return;
+    if (authUser?.password_change_required) {
+      if (currentPath !== '/password-change') navigatePath('/password-change', true);
+      return;
+    }
+    if (authUser && currentPath === '/password-change') {
+      navigatePath(pathForTab(authUser.role, defaultTabForRole(authUser.role)), true);
+      return;
+    }
     if (authUser) {
       const routeRole = roleFromPath(currentPath);
       if (!routeRole || (routeRole === authUser.role && currentPath.endsWith('/login'))) {
@@ -273,12 +282,12 @@ export default function App() {
   }, [authChecking, authUser, currentPath, navigatePath]);
 
   useEffect(() => {
-    if (!authUser) return;
+    if (!authUser || authUser.password_change_required) return;
     void refreshData(businessDate);
   }, [authUser, businessDate, refreshData]);
 
   const syncWorkspace = useCallback(async () => {
-    if (!authUser || document.visibilityState !== 'visible') return;
+    if (!authUser || authUser.password_change_required || document.visibilityState !== 'visible') return;
     void refreshData(businessDate);
     try {
       const [status, supportResult, announcementResult] = await Promise.all([
@@ -307,7 +316,8 @@ export default function App() {
           current.avatar_url === status.user.avatar_url &&
           current.stylist_id === status.user.stylist_id &&
           current.role === status.user.role &&
-          current.active === status.user.active
+          current.active === status.user.active &&
+          current.password_change_required === status.user.password_change_required
         ) return current;
         return status.user;
       });
@@ -317,7 +327,7 @@ export default function App() {
   }, [authUser, businessDate, refreshData]);
 
   useEffect(() => {
-    if (!authUser) return;
+    if (!authUser || authUser.password_change_required) return;
     void syncWorkspace();
     const fallbackInterval = window.setInterval(() => void syncWorkspace(), 60000);
     window.addEventListener('focus', syncWorkspace);
@@ -330,7 +340,7 @@ export default function App() {
   }, [authUser?.id, syncWorkspace]);
 
   useEffect(() => {
-    if (!authUser || import.meta.env.PROD) return;
+    if (!authUser || authUser.password_change_required || import.meta.env.PROD) return;
     const events = new EventSource('/api/events');
     const handleWorkspaceUpdate = () => {
       window.dispatchEvent(new Event('salon:workspace-updated'));
@@ -648,17 +658,6 @@ export default function App() {
     );
   }
 
-  if (authUser && routeRole !== authUser.role) {
-    return (
-      <div className="min-h-screen flex flex-col bg-transparent p-6">
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm font-semibold text-[#667085]">Opening your workspace…</p>
-        </div>
-        <BrandFooter className="w-full" />
-      </div>
-    );
-  }
-
   if (!authUser) {
     return (
       <AuthView
@@ -669,6 +668,25 @@ export default function App() {
         onLogin={handleLogin}
         onRetry={() => void checkAuthStatus()}
       />
+    );
+  }
+
+  if (authUser.password_change_required) {
+    return <ForcedPasswordChangeView
+      name={authUser.name}
+      onComplete={() => setAuthUser((current) => current ? { ...current, password_change_required: false } : current)}
+      onLogout={() => void handleLogout()}
+    />;
+  }
+
+  if (routeRole !== authUser.role) {
+    return (
+      <div className="min-h-screen flex flex-col bg-transparent p-6">
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm font-semibold text-[#667085]">Opening your workspace…</p>
+        </div>
+        <BrandFooter className="w-full" />
+      </div>
     );
   }
 
