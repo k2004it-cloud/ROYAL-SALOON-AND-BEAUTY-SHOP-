@@ -23,6 +23,7 @@ import sys
 import threading
 import time
 import uuid
+from zoneinfo import ZoneInfo
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse, urlsplit, urlunsplit
@@ -204,6 +205,9 @@ def init_db() -> None:
                 conn.execute(
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_change_required INTEGER NOT NULL DEFAULT 0"
                 )
+                conn.execute(
+                    "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS attendance_qr_token TEXT NOT NULL DEFAULT ''"
+                )
 
                 conn.execute(
                     """
@@ -274,6 +278,7 @@ def init_db() -> None:
                 address TEXT NOT NULL DEFAULT '',
                 opening_time TEXT NOT NULL DEFAULT '09:00',
                 closing_time TEXT NOT NULL DEFAULT '19:30',
+                attendance_qr_token TEXT NOT NULL DEFAULT '',
                 updated_at TEXT NOT NULL,
                 updated_by TEXT NOT NULL DEFAULT ''
             );
@@ -536,6 +541,8 @@ def init_db() -> None:
             cur.execute("ALTER TABLE business_settings ADD COLUMN opening_time TEXT NOT NULL DEFAULT '09:00'")
         if "closing_time" not in settings_columns:
             cur.execute("ALTER TABLE business_settings ADD COLUMN closing_time TEXT NOT NULL DEFAULT '19:30'")
+        if "attendance_qr_token" not in settings_columns:
+            cur.execute("ALTER TABLE business_settings ADD COLUMN attendance_qr_token TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             INSERT OR IGNORE INTO business_settings
@@ -1971,6 +1978,19 @@ class SalonHandler(BaseHTTPRequestHandler):
                     self._send_json(200, {"admins": [_public_user(row) | {"created_at": row["created_at"]} for row in admins]})
                     return
 
+                if path == "/api/attendance/qr-code":
+                    if user["role"] != "admin":
+                        self._send_json(403, {"error": "Administrator access is required to view the attendance QR code."})
+                        return
+                    settings = conn.execute("SELECT attendance_qr_token FROM business_settings WHERE id = 1").fetchone()
+                    qr_token = settings["attendance_qr_token"] or ""
+                    if not qr_token:
+                        qr_token = secrets.token_urlsafe(32)
+                        conn.execute("UPDATE business_settings SET attendance_qr_token = ? WHERE id = 1", (qr_token,))
+                        conn.commit()
+                    self._send_json(200, {"code": f"ROYAL-SALON-ATTENDANCE:{qr_token}"})
+                    return
+
                 if path == "/api/bootstrap":
                     stylists = [dict(r) for r in conn.execute("SELECT * FROM stylists WHERE active = 1 ORDER BY name").fetchall()]
                     catalog = [dict(r) for r in conn.execute("SELECT * FROM catalog_items WHERE active = 1 ORDER BY kind, category, name").fetchall()]
@@ -2538,7 +2558,7 @@ class SalonHandler(BaseHTTPRequestHandler):
                     if user["role"] != "employee":
                         self._send_json(403, {"error": "Employee attendance is available only to the signed-in employee."})
                         return
-                    now = datetime.datetime.now().astimezone()
+                    now = datetime.datetime.now(ZoneInfo("Africa/Nairobi"))
                     work_date = now.date().isoformat()
                     now_iso = now.isoformat(timespec="seconds")
                     existing = conn.execute(
@@ -2546,6 +2566,12 @@ class SalonHandler(BaseHTTPRequestHandler):
                         (user["id"], work_date),
                     ).fetchone()
                     if path.endswith("/clock-in"):
+                        scanned_code = body.get("attendance_code", "")
+                        settings = conn.execute("SELECT attendance_qr_token FROM business_settings WHERE id = 1").fetchone()
+                        expected_code = f"ROYAL-SALON-ATTENDANCE:{settings['attendance_qr_token']}" if settings and settings["attendance_qr_token"] else ""
+                        if not isinstance(scanned_code, str) or not expected_code or not hmac.compare_digest(scanned_code, expected_code):
+                            self._send_json(403, {"error": "Scan the Royal Saloon attendance QR code to clock in."})
+                            return
                         if existing:
                             message = "You are already clocked in." if not existing["clock_out"] else "You have already completed attendance for today."
                             self._send_json(409, {"error": message})

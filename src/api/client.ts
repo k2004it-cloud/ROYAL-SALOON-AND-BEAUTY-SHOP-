@@ -208,8 +208,12 @@ export const salonApi = {
     return apiRequest('/api/attendance?date=' + encodeURIComponent(date));
   },
 
-  clockIn(): Promise<{ record: AttendanceRecord }> {
-    return apiRequest('/api/employee/attendance/clock-in', { method: 'POST', body: JSON.stringify({}) });
+  attendanceQrCode(): Promise<{ code: string }> {
+    return apiRequest('/api/attendance/qr-code');
+  },
+
+  clockIn(attendance_code: string): Promise<{ record: AttendanceRecord }> {
+    return apiRequest('/api/employee/attendance/clock-in', { method: 'POST', body: JSON.stringify({ attendance_code }) });
   },
 
   clockOut(): Promise<{ record: AttendanceRecord }> {
