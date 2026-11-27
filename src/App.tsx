@@ -640,7 +640,7 @@ export default function App() {
     ? data?.stylists.find((stylist) => stylist.id === authUser.stylist_id)
     : undefined;
 
-  if (showPostLoginLoader) {
+  if (showPostLoginLoader && !authUser?.password_change_required) {
     return <PostLoginLoader />;
   }
 
@@ -674,7 +674,10 @@ export default function App() {
   if (authUser.password_change_required) {
     return <ForcedPasswordChangeView
       name={authUser.name}
-      onComplete={() => setAuthUser((current) => current ? { ...current, password_change_required: false } : current)}
+      onComplete={() => {
+        setShowPostLoginLoader(false);
+        setAuthUser((current) => current ? { ...current, password_change_required: false } : current);
+      }}
       onLogout={() => void handleLogout()}
     />;
   }
