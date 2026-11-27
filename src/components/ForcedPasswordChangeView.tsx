@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyRound, LogOut } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, LogOut } from 'lucide-react';
 import { salonApi } from '../api/client';
 import { BrandFooter } from './BrandFooter';
 import { ThemeToggle } from './ThemeToggle';
@@ -13,6 +13,8 @@ interface ForcedPasswordChangeViewProps {
 export function ForcedPasswordChangeView({ name, onComplete, onLogout }: ForcedPasswordChangeViewProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -48,8 +50,8 @@ export function ForcedPasswordChangeView({ name, onComplete, onLogout }: ForcedP
           <p id="forced-password-description" className="mt-1 text-sm text-[#64748B]">Hi {name}, create a new password before continuing to your workspace.</p>
           {error && <p role="alert" className="mt-4 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-xs font-semibold text-[#B91C1C]">{error}</p>}
           <form onSubmit={(event) => void submit(event)} className="mt-6 space-y-4">
-            <div><label htmlFor="required-new-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">New password (10+ characters)</label><input id="required-new-password" type="password" autoComplete="new-password" minLength={10} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required autoFocus className="salon-input w-full px-3 text-sm text-[#14213D]" /></div>
-            <div><label htmlFor="required-confirm-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Confirm new password</label><input id="required-confirm-password" type="password" autoComplete="new-password" minLength={10} maxLength={128} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required className="salon-input w-full px-3 text-sm text-[#14213D]" /></div>
+            <div><label htmlFor="required-new-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">New password (10+ characters)</label><div className="relative"><input id="required-new-password" type={showNewPassword ? 'text' : 'password'} autoComplete="new-password" minLength={10} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required autoFocus className="salon-input w-full px-3 pr-11 text-sm text-[#14213D]" /><button type="button" onClick={() => setShowNewPassword(value => !value)} aria-label={showNewPassword ? 'Hide new password' : 'Show new password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0B5ED7]">{showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+            <div><label htmlFor="required-confirm-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Confirm new password</label><div className="relative"><input id="required-confirm-password" type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" minLength={10} maxLength={128} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required className="salon-input w-full px-3 pr-11 text-sm text-[#14213D]" /><button type="button" onClick={() => setShowConfirmPassword(value => !value)} aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0B5ED7]">{showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
             <button type="submit" disabled={busy} className="auth-primary-button h-12 w-full rounded-xl text-sm font-bold disabled:opacity-60">{busy ? 'Updating…' : 'Save new password'}</button>
           </form>
           <button type="button" onClick={onLogout} className="mt-4 inline-flex w-full items-center justify-center gap-2 text-xs font-semibold text-[#64748B] hover:text-[#0B5ED7]"><LogOut className="h-3.5 w-3.5" />Sign out</button>

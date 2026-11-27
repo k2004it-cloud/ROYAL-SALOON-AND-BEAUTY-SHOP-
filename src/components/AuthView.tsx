@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { salonApi } from '../api/client';
 import { BrandFooter } from './BrandFooter';
 import { ThemeToggle } from './ThemeToggle';
@@ -16,12 +16,15 @@ interface AuthViewProps {
 export function AuthView({ demoMode, connectionError, error, busy, onLogin, onRetry }: AuthViewProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const initialResetToken = new URLSearchParams(window.location.hash.slice(1)).get('reset_token') ?? '';
   const [recoveryMode, setRecoveryMode] = useState<'login' | 'request' | 'reset'>(initialResetToken ? 'reset' : 'login');
   const [resetToken, setResetToken] = useState(initialResetToken);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
   const [recoveryMessage, setRecoveryMessage] = useState('');
@@ -72,8 +75,8 @@ export function AuthView({ demoMode, connectionError, error, busy, onLogin, onRe
             </form>
           ) : recoveryMode === 'reset' ? (
             <form onSubmit={handleConfirmReset} className="mt-6 space-y-4">
-              <div><label htmlFor="new-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">New password</label><input id="new-password" type="password" autoComplete="new-password" minLength={10} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="salon-input w-full px-3 text-sm text-[#14213D]" /></div>
-              <div><label htmlFor="confirm-new-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Confirm new password</label><input id="confirm-new-password" type="password" autoComplete="new-password" minLength={10} maxLength={128} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required className="salon-input w-full px-3 text-sm text-[#14213D]" /></div>
+              <div><label htmlFor="new-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">New password</label><div className="relative"><input id="new-password" type={showNewPassword ? 'text' : 'password'} autoComplete="new-password" minLength={10} maxLength={128} value={newPassword} onChange={e => setNewPassword(e.target.value)} required className="salon-input w-full px-3 pr-11 text-sm text-[#14213D]" /><button type="button" onClick={() => setShowNewPassword(value => !value)} aria-label={showNewPassword ? 'Hide new password' : 'Show new password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0B5ED7]">{showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+              <div><label htmlFor="confirm-new-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Confirm new password</label><div className="relative"><input id="confirm-new-password" type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" minLength={10} maxLength={128} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required className="salon-input w-full px-3 pr-11 text-sm text-[#14213D]" /><button type="button" onClick={() => setShowConfirmPassword(value => !value)} aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0B5ED7]">{showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
               <button disabled={recoveryBusy || !resetToken} className="h-12 w-full rounded-xl bg-gradient-to-r from-[#0D6EFD] to-[#0B5ED7] text-sm font-bold text-white disabled:opacity-60">{recoveryBusy ? 'Updating…' : 'Set new password'}</button>
               {!resetToken && <p className="text-xs text-[#B91C1C]">This reset link is missing its token. Request a new link.</p>}
             </form>
@@ -82,7 +85,7 @@ export function AuthView({ demoMode, connectionError, error, busy, onLogin, onRe
           ) : (
             <form onSubmit={e => { e.preventDefault(); onLogin({ username: username.trim(), password }); }} className="mt-6 space-y-4">
               <div><label htmlFor="staff-username" className="mb-1.5 block text-xs font-semibold text-[#344054]">Username</label><input id="staff-username" autoComplete="username" minLength={3} maxLength={30} value={username} onChange={e => setUsername(e.target.value)} required className="salon-input w-full px-3 text-sm text-[#14213D]" /></div>
-              <div><label htmlFor="staff-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Password</label><input id="staff-password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required className="salon-input w-full px-3 text-sm text-[#14213D]" /></div>
+              <div><label htmlFor="staff-password" className="mb-1.5 block text-xs font-semibold text-[#344054]">Password</label><div className="relative"><input id="staff-password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required className="salon-input w-full px-3 pr-11 text-sm text-[#14213D]" /><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0B5ED7]">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
               <button type="submit" disabled={busy} className="auth-primary-button h-12 w-full rounded-xl text-sm font-bold disabled:opacity-60">{busy ? 'Please wait…' : 'Sign in'}</button>
               {!demoMode && <button type="button" onClick={() => { setRecoveryMode('request'); setRecoveryError(''); setRecoveryMessage(''); }} className="w-full text-center text-xs font-semibold text-[#0B5ED7] underline underline-offset-2">Forgot password?</button>}
             </form>
