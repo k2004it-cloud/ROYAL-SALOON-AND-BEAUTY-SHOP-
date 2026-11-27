@@ -257,7 +257,7 @@ export function EmployeesView({ onNotify, demoMode, isSuperadmin = false }: Empl
                   Cancel
                 </button>
                 <button type="submit" disabled={saving} className="h-11 rounded-lg bg-[#6D28D9] px-5 text-sm font-semibold text-white disabled:opacity-60">
-                  {saving ? 'Creating…' : 'Create Account'}
+                  {saving ? 'Adding employee…' : 'Add Employee'}
                 </button>
               </div>
             </form>
